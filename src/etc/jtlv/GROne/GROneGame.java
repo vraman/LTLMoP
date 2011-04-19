@@ -725,13 +725,38 @@ public class GROneGame {
                 BDD input = null;
                 int new_i = -1, new_j = -1;
                 // For each env successor
-                if (input == null) {                  	
+                if (input == null) {                 
+                	
+                	
+                	// computing the set of env possible successors.
+	                Vector<BDD> succs = new Vector<BDD>();
+	                BDD all_succs = env.succ(p_st);
+	                for (BDDIterator all_states = all_succs.iterator(env
+	                        .moduleUnprimeVars()); all_states.hasNext();) {
+	                    BDD sin = (BDD) all_states.next();
+	                    succs.add(sin);
+	                }
+	                for (Iterator<BDD> iter_succ = succs.iterator(); iter_succ
+                    .hasNext();) {
+	                	BDD primed_cur_succ = Env.prime(iter_succ.next());
+	                	if (!(p_st.and(primed_cur_succ).and(sys.yieldStates(env,Env.FALSE())).isZero())) {
+		                	input = primed_cur_succ;
+		                	new_i = rank_i;
+		                	new_j = rank_j;	
+		                	System.out.println("one succ" + primed_cur_succ);               	
+			                   
+		                	break;		                    	
+	                	} 
+                	}
+
+	                
+	                
 		                /* Find Z index of current state */
 		                // find minimal Z_a
 		                int p_a = -1;
 		             // computing the set of env possible successors.
-		                Vector<BDD> succs = new Vector<BDD>();
-		                BDD all_succs = env.succ(p_st);
+		                succs = new Vector<BDD>();
+		                all_succs = env.succ(p_st);
 		                for (BDDIterator all_states = all_succs.iterator(env
 		                        .moduleUnprimeVars()); all_states.hasNext();) {
 		                    BDD sin = (BDD) all_states.next();
@@ -1487,7 +1512,7 @@ public class GROneGame {
 			String res = "State " + id + " with rank (" + rank_i + "," + rank_j + ") -> " 
 				+ state.toStringWithDomains(Env.stringer) + "\n";
 			if (succ.isEmpty()) {
-				res += "\tWith no successors.";
+				res += "\tWith input " + input + " and no successors.";
 			} else {
 				RawCState[] all_succ = new RawCState[succ.size()];
 				succ.toArray(all_succ);
