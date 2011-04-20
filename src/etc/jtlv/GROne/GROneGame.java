@@ -971,8 +971,20 @@ public class GROneGame {
                 }	
 		                
                 // computing the set of system possible successors.
-                Vector<BDD> sys_succs = new Vector<BDD>();
+                Vector<BDD> sys_succs = new Vector<BDD>();               
                 BDD all_sys_succs = sys.succ(p_st.and(input));
+                if (all_sys_succs.equals(Env.FALSE())) {
+                	RawCState gsucc = new RawCState(aut.size(), Env.unprime(input), new_j, new_i, input);
+                    idx = aut.indexOf(gsucc); // the equals doesn't consider
+                                              // the id number.
+                    if (idx == -1) {                       
+                        aut.add(gsucc);
+                        idx = aut.indexOf(gsucc);
+                    }
+                    new_state.add_succ(aut.elementAt(idx));
+                	continue;                	
+                }               	
+                
                 for (BDDIterator all_sys_states = all_sys_succs.iterator(sys
                         .moduleUnprimeVars()); all_sys_states.hasNext();) {
                     BDD sin = (BDD) all_sys_states.next();
@@ -1306,12 +1318,7 @@ public class GROneGame {
 		// return null; // res;
 	}*/
 	
-	public BDD controlStatesX(Module controller, Module responder, BDD to, BDD x) {
-		BDDVarSet responder_prime = responder.modulePrimeVars();
-		BDDVarSet this_prime = controller.modulePrimeVars();
-		BDD exy = Env.prime(to).and(responder.trans()).forAll(responder_prime);
-		return controller.trans().and(exy).and(x);
-	}
+
 		
 	@SuppressWarnings("unused")
 	private class RawState {
@@ -1512,7 +1519,7 @@ public class GROneGame {
 			String res = "State " + id + " with rank (" + rank_i + "," + rank_j + ") -> " 
 				+ state.toStringWithDomains(Env.stringer) + "\n";
 			if (succ.isEmpty()) {
-				res += "\tWith input " + input + " and no successors.";
+				res += "\tWith no successors.";				
 			} else {
 				RawCState[] all_succ = new RawCState[succ.size()];
 				succ.toArray(all_succ);
