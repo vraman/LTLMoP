@@ -847,6 +847,7 @@ def parseCond(condition,sensorList,allRobotProp,ReqType,lineInd):
     condRE = re.compile('('+ possCond + ')',re.IGNORECASE)
     subCond = re.split(condRE,condition)
   
+    EdgeType = None
 
     for subCondition in subCond:
 
