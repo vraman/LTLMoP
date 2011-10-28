@@ -34,6 +34,10 @@ public class GROneGame {
 	private BDD player1_winning;
 	private BDD player2_winning;
 	
+	BDD slowSame, fastSame;
+	BDDVarSet sys_slow_prime;
+	BDDVarSet sys_fast_prime;		
+
 	// p2_winning in GRGAmes are !p1_winning
 
 	public GROneGame(ModuleWithWeakFairness env, ModuleWithWeakFairness sys, int sysJustNum, int envJustNum)
@@ -57,6 +61,33 @@ public class GROneGame {
 		x2_mem = new BDD[sysJustNum][envJustNum][50][50];
 		y2_mem = new BDD[sysJustNum][50];
 		z2_mem = new BDD[50];	
+
+		ModuleBDDField [] allFields = sys.getAllFields();				
+		sys_slow_prime = Env.getEmptySet();
+		sys_fast_prime = Env.getEmptySet();
+
+		slowSame = Env.TRUE();
+		for (int i = 0; i < allFields.length; i++) {			
+			ModuleBDDField thisField = allFields[i];
+			ModuleBDDField thisPrime = thisField.prime();	
+			String fieldName = thisPrime.support().toString();
+			if (fieldName.startsWith("<bit")) {
+				slowSame = slowSame.id().and(thisField.getDomain().buildEquals(thisField.getOtherDomain()));
+				sys_slow_prime = sys_slow_prime.union(thisPrime.support());
+			} else sys_fast_prime = sys_fast_prime.union(thisPrime.support());
+		}	
+		
+		fastSame = Env.TRUE();
+		for (int i = 0; i < allFields.length; i++) {			
+			ModuleBDDField thisField = allFields[i];
+			ModuleBDDField thisPrime = thisField.prime();	
+			String fieldName = thisPrime.support().toString();
+			if (!fieldName.startsWith("<bit")) {
+				fastSame = fastSame.id().and(thisField.getDomain().buildEquals(thisField.getOtherDomain()));
+				sys_fast_prime = sys_fast_prime.union(thisPrime.support());
+			} else sys_fast_prime = sys_fast_prime.union(thisPrime.support());
+		}	
+
 		this.player2_winning = this.calculate_win();	
 		this.player1_winning = this.calculate_loss();
 		//this.player1_winning = this.player2_winning.not();
@@ -94,14 +125,14 @@ public class GROneGame {
 				cy = 0;
 				y = Env.FALSE();
 				for (iterY = new FixPoint<BDD>(); iterY.advance(y);) {
-					BDD start = sys.justiceAt(j).and(env.yieldStates(sys, z))
-							.or(env.yieldStates(sys, y));
+					BDD start = sys.justiceAt(j).and(yieldStates(env,sys, z))
+							.or(yieldStates(env,sys, y));
 					y = Env.FALSE();
 					for (int i = 0; i < envJustNum; i++) {
 						BDD negp = env.justiceAt(i).not();
 						x = z.id();
 						for (iterX = new FixPoint<BDD>(); iterX.advance(x);) {
-							x = negp.and(env.yieldStates(sys, x)).or(start);
+							x = negp.and(yieldStates(env,sys, x)).or(start);
 						}
 						x_mem[j][i][cy] = x.id();
 						//System.out.println("X ["+ j + ", " + i + ", " + cy + "] = " + x_mem[j][i][cy]);							
@@ -126,6 +157,48 @@ public class GROneGame {
 		return z.id();
 	}
 	
+    // COX	
+	/*public BDD yieldStates(Module env, Module sys, BDD to) {
+		BDDVarSet env_prime = env.modulePrimeVars();
+		BDDVarSet sys_prime = sys.modulePrimeVars();
+
+
+		BDD exy1 = (Env.prime(to).and(sys.trans())).exist(sys_slow_prime);		
+		BDD exy3 = Env.unprime(Env.prime(to).and(sys.trans()).and(fastSame).exist(sys_prime));		
+		BDD exy2 = (sys.trans().and(slowSame.and(exy3))).exist(sys_slow_prime);
+		return env.trans().imp((exy1.and(exy2)).exist(sys_fast_prime)).forAll(env_prime);
+	}*/
+	
+    //COX_FS
+	public BDD yieldStates(Module env, Module sys, BDD to) {
+		BDDVarSet env_prime = env.modulePrimeVars();
+		BDDVarSet sys_prime = sys.modulePrimeVars();
+
+		BDD exy1 = (Env.prime(to).and(sys.trans())).exist(sys_slow_prime);		
+		BDD exy3 = Env.unprime(Env.prime(to).and(sys.trans()).and(fastSame).exist(sys_prime));		
+		BDD exy2 = (sys.trans().and(slowSame.and(exy3))).exist(sys_slow_prime);
+		BDD fs1 = env.trans().imp(exy1.and(exy2).and(slowSame.not()).and(fastSame.not()).exist(sys_fast_prime)).forAll(env_prime);
+
+		
+        BDD exy4 = Env.prime(to).and(sys.trans()).and(slowSame.or(fastSame)).exist(sys_prime);
+        BDD fs2 = env.trans().imp(exy4).forAll(env_prime);
+	
+
+        
+        return fs1.or(fs2);
+	}
+
+  /*public BDD yieldStates(Module env, Module sys, BDD to) {
+        return yieldStates(env,sys,to);
+    }*/
+
+	// XOC
+	public BDD controlStates(Module sys, Module env, BDD to) {	
+		BDDVarSet env_prime = env.modulePrimeVars();
+		BDD exy1 = (sys.trans().imp(Env.prime(to))).forAll(sys_slow_prime);		
+		BDD exy2 = (sys.trans().imp(slowSame.not())).forAll(sys_slow_prime);		
+		return ((env.trans().and(exy1.or(exy2))).exist(env_prime)).forAll(sys_fast_prime);
+	}
 	private BDD calculate_loss() {
 		BDD x, y, z;
 		FixPoint<BDD> iterZ, iterY, iterX;
@@ -139,15 +212,15 @@ public class GROneGame {
 			for (int j = 0; j < sysJustNum; j++) {							
 				y = Env.TRUE();			
 				for (iterY = new FixPoint<BDD>(); iterY.advance(y);) {
-					BDD start = ((sys.justiceAt(j).not()).or((env.yieldStates(sys, z.not())).not()))
+					BDD start = ((sys.justiceAt(j).not()).or((yieldStates(env,sys, z.not())).not()))
 						//BDD start = ((sys.justiceAt(j).not()).or(sys.yieldStates(sys, z)))
-								.and((env.yieldStates(sys, y.not())).not());
+								.and((yieldStates(env,sys, y.not())).not());
 					for (int i = 0; i < envJustNum; i++) {
 						x = Env.FALSE();
 						c=0;
 						for (iterX = new FixPoint<BDD>(); iterX.advance(x);) {
-							x = x.id().or((env.justiceAt(i).or(((env.yieldStates(sys, x.not())).not()))).and(start));
-							//x = x.id().or((env.justiceAt(i).or(env.yieldStates(sys, x))).and(start));
+							x = x.id().or((env.justiceAt(i).or(((yieldStates(env,sys, x.not())).not()))).and(start));
+							//x = x.id().or((env.justiceAt(i).or(yieldStates(env,sys, x))).and(start));
 							x2_mem[j][i][a][c] = x.id();
 							//System.out.println("X ["+ j + ", " + i + ", " + a + ", " + c + "] = " + x2_mem[j][i][a][c]);
 							c++;
@@ -833,11 +906,11 @@ public class GROneGame {
 					if (p_az == 0) {
 					//special caze when we are in Z_0. Either we force a safety violation, or we go to the relevant y2_mem[a][j], 
 					//and continue to violate the system liveness j
-						input = input.or(p_st.and(primed_cur_succ.and(sys.yieldStates(env,Env.FALSE()))));
-						if (input.isZero()) input = input.or(p_st.and((primed_cur_succ.and(sys.yieldStates(env,(Env.unprime(primed_cur_succ).and(y2_mem[p_j][p_az])))))));  
+						input = input.or(p_st.and(primed_cur_succ.and(controlStates(sys,env,Env.FALSE()))));
+						if (input.isZero()) input = input.or(p_st.and((primed_cur_succ.and(controlStates(sys,env,(Env.unprime(primed_cur_succ).and(y2_mem[p_j][p_az])))))));  
 													
 					} else {						
-						input = input.or(p_st.and((primed_cur_succ.and(sys.yieldStates(env,(Env.unprime(primed_cur_succ).and(z2_mem[p_az-1])))))));
+						input = input.or(p_st.and((primed_cur_succ.and(controlStates(sys,env,(Env.unprime(primed_cur_succ).and(z2_mem[p_az-1])))))));
 					}
 					if (!input.equals(oldInput)) {	
 						//System.out.println("RHO 1");	
@@ -857,8 +930,8 @@ public class GROneGame {
 					//\rho_2 transitions		                
 					if (rank_j == -1) {
 						//same thing as above -- Z_0 is special
-						if (p_az == 0) input = input.or(p_st.and(primed_cur_succ.and(sys.yieldStates(env,(Env.unprime(primed_cur_succ).and(y2_mem[p_j][p_az]))))).and((sys.yieldStates(env,Env.FALSE())).not()));
-						else input = input.or(p_st.and(primed_cur_succ.and(sys.yieldStates(env,(Env.unprime(primed_cur_succ).and(y2_mem[p_j][p_az]))))).and((sys.yieldStates(env,z2_mem[p_az-1])).not()));
+						if (p_az == 0) input = input.or(p_st.and(primed_cur_succ.and(controlStates(sys,env,(Env.unprime(primed_cur_succ).and(y2_mem[p_j][p_az]))))).and((controlStates(sys,env,Env.FALSE())).not()));
+						else input = input.or(p_st.and(primed_cur_succ.and(controlStates(sys,env,(Env.unprime(primed_cur_succ).and(y2_mem[p_j][p_az]))))).and((controlStates(sys,env,z2_mem[p_az-1])).not()));
 						if (!input.equals(oldInput)) {
 							//System.out.println("RHO 2");									
 							new_i = rank_i;
@@ -874,11 +947,11 @@ public class GROneGame {
 						new_i = (rank_i + 1) % env.justiceNum();
 						new_j = rank_j;		                	
 						if (p_az == 0) 
-							input = input.or((p_st.and(primed_cur_succ.and(sys.yieldStates(env,(Env.unprime(primed_cur_succ).and(y2_mem[rank_j][p_az])))))
-									.and((sys.yieldStates(env,(Env.FALSE()))).not())));		        				
+							input = input.or((p_st.and(primed_cur_succ.and(controlStates(sys,env,(Env.unprime(primed_cur_succ).and(y2_mem[rank_j][p_az])))))
+									.and((controlStates(sys,env,(Env.FALSE()))).not())));		        				
 						else 
-							input = input.or((p_st.and(primed_cur_succ.and((sys.yieldStates(env,(Env.unprime(primed_cur_succ).and(y2_mem[rank_j][p_az]))))))
-									.and((sys.yieldStates(env,z2_mem[p_az-1])).not())));
+							input = input.or((p_st.and(primed_cur_succ.and((controlStates(sys,env,(Env.unprime(primed_cur_succ).and(y2_mem[rank_j][p_az]))))))
+									.and((controlStates(sys,env,z2_mem[p_az-1])).not())));
 					}
 					if (!input.equals(oldInput) && det) break;						
 					
@@ -886,24 +959,24 @@ public class GROneGame {
 					if (rank_i != -1 && rank_j != -1) {
 						if (p_az == 0) {
 							if (p_c == 0) {
-								input = input.or(((p_st.and((primed_cur_succ.and((sys.yieldStates(env,(Env.unprime(primed_cur_succ).and(x2_mem[rank_j][rank_i][p_az][p_c]))))))))))
+								input = input.or(((p_st.and((primed_cur_succ.and((controlStates(sys,env,(Env.unprime(primed_cur_succ).and(x2_mem[rank_j][rank_i][p_az][p_c]))))))))))
 												//this next clause is probably superfluous because of \rho_1
-												.and((sys.yieldStates(env,Env.FALSE())).not());
+												.and((controlStates(sys,env,Env.FALSE())).not());
 													
 							} else {
-								input = input.or(((p_st.and(primed_cur_succ.and((sys.yieldStates(env,(Env.unprime(primed_cur_succ).and(x2_mem[rank_j][rank_i][p_az][p_c-1])))))))))
-												.and((sys.yieldStates(env,Env.FALSE())).not());
+								input = input.or(((p_st.and(primed_cur_succ.and((controlStates(sys,env,(Env.unprime(primed_cur_succ).and(x2_mem[rank_j][rank_i][p_az][p_c-1])))))))))
+												.and((controlStates(sys,env,Env.FALSE())).not());
 							}
 						} else {
 							if (p_c == 0) {
-								input = input.or(((p_st.and(primed_cur_succ.and((sys.yieldStates(env,(Env.unprime(primed_cur_succ).and(x2_mem[rank_j][rank_i][p_az][p_c])))))))))
-												.and((sys.yieldStates(env,z2_mem[p_az-1])).not());
+								input = input.or(((p_st.and(primed_cur_succ.and((controlStates(sys,env,(Env.unprime(primed_cur_succ).and(x2_mem[rank_j][rank_i][p_az][p_c])))))))))
+												.and((controlStates(sys,env,z2_mem[p_az-1])).not());
 								
 																				
 							
 							} else {
-								input = input.or(((p_st.and(primed_cur_succ.and((sys.yieldStates(env,(Env.unprime(primed_cur_succ).and(x2_mem[rank_j][rank_i][p_az][p_c-1])))))))))
-												.and((sys.yieldStates(env,z2_mem[p_az-1])).not());
+								input = input.or(((p_st.and(primed_cur_succ.and((controlStates(sys,env,(Env.unprime(primed_cur_succ).and(x2_mem[rank_j][rank_i][p_az][p_c-1])))))))))
+												.and((controlStates(sys,env,z2_mem[p_az-1])).not());
 													
 							}
 						}	
