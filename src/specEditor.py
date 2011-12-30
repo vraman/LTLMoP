@@ -1750,7 +1750,8 @@ class SpecEditorFrame(wx.Frame):
         event.Skip()
 
     def onMenuAnalyze(self, event): # wxGlade: SpecEditorFrame.<event_handler>
-		self.onMenuCompile(event)		
+		# auto-compile the specification before analysis 
+        self.onMenuCompile(event)		
 		# Redirect all output to the log
 		redir = RedirectText(self.text_ctrl_log)
 
@@ -1780,7 +1781,9 @@ class SpecEditorFrame(wx.Frame):
 			self.appendLog(dline)
 			if "Specification is realizable." in dline:   
 				realizable = True            
-				aut = fsa.Automaton(self.parser.proj.rfi.regions, self.parser.proj.regionMapping, None, None, None) 
+				
+                # check for trivial initial-state automaton with no transitions
+                aut = fsa.Automaton(self.parser.proj.rfi.regions, self.parser.proj.regionMapping, None, None, None) 
 				aut.loadFile(fileNamePrefix+".aut", self.list_box_sensors.GetItems(), self.list_box_actions.GetItems(), self.list_box_customs.GetItems())
 				aut.writeDot(fileNamePrefix+".dot")
 				f = open(fileNamePrefix+".dot","r")
@@ -1792,7 +1795,11 @@ class SpecEditorFrame(wx.Frame):
 					self.appendLog("Synthesized automaton is non-trivial.\n", "GREEN")					
 				else:
 					self.appendLog("Synthesized automaton is trivial.\n", "GREEN")
-			if "System initial condition is unsatisfiable." in dline:
+			
+            # highlight sentences corresponding to identified errors
+            
+            # System unsatisfiability
+            if "System initial condition is unsatisfiable." in dline:
 				for l in self.self.map['SysInit']: self.text_ctrl_spec.MarkerAdd(l,MARKER_INIT)
 			if "System transition relation is unsatisfiable." in dline:
 				for l in self.map['SysTrans']: self.text_ctrl_spec.MarkerAdd(l, MARKER_SAFE)
@@ -1807,9 +1814,7 @@ class SpecEditorFrame(wx.Frame):
 				for l in self.map['SysInit']: self.text_ctrl_spec.MarkerAdd(l,MARKER_INIT)
 				for l in self.map['SysTrans']: self.text_ctrl_spec.MarkerAdd(l,MARKER_SAFE)
            
-        
-           
-        
+            # Environment unsatisfiability
 			if "Environment initial condition is unsatisfiable." in dline:
 				for l in self.map['EnvInit']: self.text_ctrl_spec.MarkerAdd(l,MARKER_INIT)
 			if "Environment transition relation is unsatisfiable." in dline:
@@ -1826,15 +1831,15 @@ class SpecEditorFrame(wx.Frame):
 				for l in self.map['EnvTrans']: self.text_ctrl_spec.MarkerAdd(l,MARKER_SAFE)
            
         
-            
-			if "System is unrealizable because the environment can force a safety violation." in dline:
+            # System unrealizability
+            if "System is unrealizable because the environment can force a safety violation." in dline:
 				for l in self.map['SysTrans']: self.text_ctrl_spec.MarkerAdd(l, MARKER_SAFE)
 			if "System highlighted goal(s) unrealizable." in dline:
 				for l in (dline.strip()).split()[2:]:
 					self.text_ctrl_spec.MarkerAdd(self.map['SysGoals'][int(l)],MARKER_LIVE)           
 				for l in self.map['SysTrans']: self.text_ctrl_spec.MarkerAdd(l, MARKER_SAFE)
             
-        
+            # Environment unrealizability
 			if "Environment is unrealizable because the environment can force a safety violation." in dline:
 				for l in self.map['EnvTrans']: self.text_ctrl_spec.MarkerAdd(l, MARKER_SAFE)
 			if "Environment highlighted goal(s) unrealizable." in dline:
@@ -1848,6 +1853,8 @@ class SpecEditorFrame(wx.Frame):
 		sys.stderr = sys.__stderr__
 
     def onMenuMopsy(self, event): # wxGlade: SpecEditorFrame.<event_handler>
+        # Opens the counterstrategy visualization interfacs ("Mopsy")
+       
         # TODO: check for failed compilation before allowing this
         subprocess.Popen(["python", os.path.join(self.proj.ltlmop_root,"etc","utils","mopsy.py"), self.fileName])
 
