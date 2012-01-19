@@ -34,7 +34,7 @@ public class GROneGame {
 	private BDD player1_winning;
 	private BDD player2_winning;
 	
-	BDD slowSame, fastSame;
+	BDD slowSame, fastSame, envSame;
 	BDDVarSet sys_slow_prime;
 	BDDVarSet sys_fast_prime;		
 
@@ -87,6 +87,21 @@ public class GROneGame {
 				sys_fast_prime = sys_fast_prime.union(thisPrime.support());
 			} else sys_fast_prime = sys_fast_prime.union(thisPrime.support());
 		}	
+		envSame = Env.TRUE();
+
+		allFields = env.getAllFields();		
+		
+		for (int i = 0; i < allFields.length; i++) {			
+
+			ModuleBDDField thisField = allFields[i];
+
+			ModuleBDDField thisPrime = thisField.prime();	
+
+			String fieldName = thisPrime.support().toString();
+			
+			envSame = envSame.id().and(thisField.getDomain().buildEquals(thisField.getOtherDomain()));
+			
+		}	
 
 		this.player2_winning = this.calculate_win();	
 		this.player1_winning = this.calculate_loss();
@@ -172,21 +187,34 @@ public class GROneGame {
     //COX_FS
 	public BDD yieldStates(Module env, Module sys, BDD to) {
 		BDDVarSet env_prime = env.modulePrimeVars();
-		BDDVarSet sys_prime = sys.modulePrimeVars();
-
-		BDD exy1 = (Env.prime(to).and(sys.trans())).exist(sys_slow_prime);		
-		BDD exy3 = Env.unprime(Env.prime(to).and(sys.trans()).and(fastSame).exist(sys_prime));		
-		BDD exy2 = (sys.trans().and(slowSame.and(exy3))).exist(sys_slow_prime);
-		BDD fs1 = env.trans().imp(exy1.and(exy2).and(slowSame.not()).and(fastSame.not()).exist(sys_fast_prime)).forAll(env_prime);
+		BDDVarSet sys_prime = sys.modulePrimeVars();//		System.out.println("to = "+ to);
 
+		//Check the complete transition
+		BDD exy1 = (Env.prime(to).and(sys.trans())).exist(sys_slow_prime);	
+//		System.out.println("exy1 = "+ exy1);		
+
+		//Check the slow transition (env and fast stay same)
+		BDD exy3 = env.trans().imp(envSame.and(Env.prime(to).and(sys.trans()).and(fastSame).exist(sys_fast_prime)).exist(env_prime));
+//		System.out.println("exy3 = "+ exy3);		
+
+		//Check the fast transitions (slow stays same)
+		BDD exy2 = (sys.trans().and(slowSame.and(Env.prime(exy3)))).exist(sys_slow_prime);
+//		System.out.println("exy2 = "+ exy2);		
 		
-        BDD exy4 = Env.prime(to).and(sys.trans()).and(slowSame.or(fastSame)).exist(sys_prime);
-        BDD fs2 = env.trans().imp(exy4).forAll(env_prime);
-	
-
-        
+		//If both types are changing, check both the intermediate state (exy2) and the complete transition (ex1)
+		BDD exy5 = ((exy1.and(exy2)).and(slowSame.not()).and(fastSame.not())).exist(sys_fast_prime);
+//		System.out.println("exy5 = "+ exy5);		
+		
+		BDD fs1 = env.trans().imp(exy5).forAll(env_prime);
+		
+        //If only one type of controller changes, use old cox
+		BDD exy4 = Env.prime(to).and(sys.trans()).and(slowSame.or(fastSame)).exist(sys_prime);
+//      System.out.println("exy4 = "+ exy4);		
+        BDD fs2 = env.trans().imp(exy4).forAll(env_prime);        
         return fs1.or(fs2);
-	}
+	}
+	
+	
 
   /*public BDD yieldStates(Module env, Module sys, BDD to) {
         return yieldStates(env,sys,to);
@@ -821,6 +849,10 @@ public class GROneGame {
 		
 		
 	public boolean calculate_counterstrategy(BDD ini, boolean enable_234, boolean det) {
+		return true;
+	}
+	
+	public boolean calculate_counterstrategy(BDD placeholder, BDD ini, boolean enable_234, boolean det) {
 		Stack<BDD> st_stack = new Stack<BDD>();
 		Stack<Integer> i_stack = new Stack<Integer>();
 		Stack<Integer> j_stack = new Stack<Integer>();	
