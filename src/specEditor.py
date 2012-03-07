@@ -1576,19 +1576,24 @@ class SpecEditorFrame(wx.Frame):
             wx.Yield()
 
         realizable = False
+        realizableFS = False
 
         for line in cmd.stdout:
             self.appendLog("\t"+line)
             if "Specification is realizable" in line:
                realizable = True
+            if "Specification is realizable with slow and fast actions" in line:
+               realizableFS = True
                
         cmd.stdout.close()
         print "\n"
 
-        if realizable:
-            self.appendLog("Automaton successfully synthesized.\n", "GREEN")
+        if realizableFS:
+            self.appendLog("Automaton successfully synthesized for slow and fast actions.\n", "GREEN")
+        elif realizable:
+            self.appendLog("Specification is unsynthesizable for slow and fast actions.\n Automaton successfully synthesized for instantaneous actions.\n", "GREEN")
         else:
-            self.appendLog("ERROR: Specification was unsynthesizable (unrealizable/unsatisfiable).\n", "RED")
+            self.appendLog("ERROR: Specification was unsynthesizable (unrealizable/unsatisfiable) for instantaneous actions.\n", "RED")
 
         sys.stdout = sys.__stdout__
         sys.stderr = sys.__stderr__
