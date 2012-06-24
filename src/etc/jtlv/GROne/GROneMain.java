@@ -24,17 +24,17 @@ public class GROneMain {
 		// GRParser.just_safety = true;
 
         // Check that we have enough arguments
-        if (args.length < 3) {
-            System.err.println("Usage: java GROneMain [smv_file] [ltl_file] [fast/slow option (1 -- fs, 0 -- not)]");
+        if (args.length < 2) {
+            System.err.println("Usage: java GROneMain [smv_file] [ltl_file] [--safety]");
             System.exit(1);
         }                
 
         Env.loadModule(args[0]);
         Spec[] spcs = Env.loadSpecFile(args[1]);
         
-        boolean fs = Boolean.parseBoolean(args[2]);
+        boolean fs = (args.length == 3);//Boolean.parseBoolean(args[2]);
 
-        // Figure out the name of our output file by stripping the spec filename extension and adding .aut
+		// Figure out the name of our output file by stripping the spec filename extension and adding .aut
         String out_filename = args[1].replaceAll("\\.[^\\.]+$",".aut");
 
 		// constructing the environment module.

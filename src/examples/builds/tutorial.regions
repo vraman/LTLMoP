@@ -1,0 +1,72 @@
+# This is a region definition file for the LTLMoP toolkit.
+# Format details are described at the beginning of each section below.
+# Note that all values are separated by *tabs*.
+
+Background: # Relative path of background image file
+None
+
+CalibrationPoints: # Vertices to use for map calibration: (vertex_region_name, vertex_index)
+
+Obstacles: # Names of regions to treat as obstacles
+
+Regions: # Stored as JSON string
+[
+    {
+        "name": "brown", 
+        "color": [128, 64, 0], 
+        "position": [340, 303], 
+        "type": "rect", 
+        "size": [58, 46]
+    }, 
+    {
+        "name": "boundary", 
+        "color": [176, 0, 255], 
+        "position": [142, 139], 
+        "type": "rect", 
+        "size": [369, 263]
+    }, 
+    {
+        "name": "red", 
+        "color": [204, 50, 50], 
+        "position": [455, 331], 
+        "type": "rect", 
+        "size": [31, 39]
+    }, 
+    {
+        "name": "purple", 
+        "color": [176, 0, 255], 
+        "position": [177, 268], 
+        "type": "rect", 
+        "size": [133, 98]
+    }, 
+    {
+        "name": "orange", 
+        "color": [255, 128, 0], 
+        "holeList": [], 
+        "points": [[0, 27], [83, 0], [72, 46], [141, 55], [141, 182], [0, 182]], 
+        "position": [275, 202], 
+        "type": "poly", 
+        "size": [141, 182]
+    }, 
+    {
+        "name": "green", 
+        "color": [0, 255, 0], 
+        "holeList": [], 
+        "points": [[0, 28], [27, 3], [129, 0], [129, 61], [129, 89], [48, 86]], 
+        "position": [278, 149], 
+        "type": "poly", 
+        "size": [129, 89]
+    }, 
+    {
+        "name": "yellow", 
+        "color": [255, 255, 0], 
+        "holeList": [], 
+        "points": [[0, 0], [149, 0], [149, 36], [149, 89], [149, 124], [0, 124]], 
+        "position": [156, 164], 
+        "type": "poly", 
+        "size": [149, 124]
+    }
+]
+
+Transitions: # Region 1 Name, Region 2 Name, Bidirectional transition faces (face1_x1, face1_y1, face1_x2, face1_y2, face2_x1, ...)
+

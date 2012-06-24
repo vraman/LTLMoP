@@ -1,0 +1,146 @@
+# This is a region definition file for the LTLMoP toolkit.
+# Format details are described at the beginning of each section below.
+# Note that all values are separated by *tabs*.
+
+Background: # Relative path of background image file
+None
+
+CalibrationPoints: # Vertices to use for map calibration: (vertex_region_name, vertex_index)
+
+Obstacles: # Names of regions to treat as obstacles
+lake
+
+Regions: # Stored as JSON string
+[
+    {
+        "name": "Stop3", 
+        "color": [255, 0, 0], 
+        "holeList": [], 
+        "points": [[0, 100], [0, 82], [0, 0], [1, 0], [28, 0], [31, 0], [31, 112], [0, 112]], 
+        "position": [107, 13], 
+        "type": "poly", 
+        "size": [31, 112]
+    }, 
+    {
+        "name": "Grass2", 
+        "color": [0, 255, 0], 
+        "holeList": [], 
+        "points": [[0, 90], [0, 0], [129, 0], [129, 204], [41, 204], [0, 204]], 
+        "position": [471, 95], 
+        "type": "poly", 
+        "size": [129, 204]
+    }, 
+    {
+        "name": "Grass1", 
+        "color": [0, 255, 0], 
+        "holeList": [], 
+        "points": [[0, 30], [0, 18], [0, 0], [205, 0], [205, 90], [205, 153], [0, 153]], 
+        "position": [107, 95], 
+        "type": "poly", 
+        "size": [205, 153]
+    }, 
+    {
+        "name": "Stop4", 
+        "color": [255, 0, 0], 
+        "holeList": [], 
+        "points": [[0, 0], [118, 0], [118, 27], [91, 27], [0, 27]], 
+        "position": [17, 94], 
+        "type": "poly", 
+        "size": [118, 27]
+    }, 
+    {
+        "name": "Road3", 
+        "color": [128, 128, 128], 
+        "holeList": [], 
+        "points": [[0, 0], [61, 0], [74, 0], [74, 82], [74, 100], [74, 112], [74, 235], [74, 533], [0, 533]], 
+        "position": [33, 13], 
+        "type": "poly", 
+        "size": [74, 533]
+    }, 
+    {
+        "name": "Stop2", 
+        "color": [255, 0, 0], 
+        "position": [566, 13], 
+        "type": "rect", 
+        "size": [31, 107]
+    }, 
+    {
+        "name": "Road2", 
+        "color": [144, 144, 144], 
+        "holeList": [], 
+        "points": [[0, 0], [698, 0], [698, 66], [554, 66], [0, 66]], 
+        "position": [17, 27], 
+        "type": "poly", 
+        "size": [698, 66]
+    }, 
+    {
+        "name": "Stop1", 
+        "color": [255, 0, 0], 
+        "position": [574, 96], 
+        "type": "rect", 
+        "size": [144, 25]
+    }, 
+    {
+        "name": "Road1", 
+        "color": [128, 128, 128], 
+        "position": [601, 26], 
+        "type": "rect", 
+        "size": [96, 520]
+    }, 
+    {
+        "name": "lake", 
+        "color": [0, 128, 255], 
+        "holeList": [], 
+        "points": [[0, 0], [302, 0], [302, 114], [302, 225], [302, 359], [0, 359]], 
+        "position": [210, 185], 
+        "type": "poly", 
+        "size": [302, 359]
+    }, 
+    {
+        "name": "boundary", 
+        "color": [0, 128, 255], 
+        "holeList": [], 
+        "points": [[0, 161], [0, 0], [17, 0], [78, 0], [91, 0], [92, 0], [119, 0], [122, 0], [550, 0], [581, 0], [698, 0], [698, 54], [698, 88], [698, 113], [698, 532], [0, 532]], 
+        "position": [16, 13], 
+        "type": "poly", 
+        "size": [698, 532]
+    }, 
+    {
+        "name": "AssemblyShop", 
+        "color": [255, 0, 128], 
+        "holeList": [], 
+        "points": [[0, 0], [106, 0], [106, 176], [102, 176], [61, 176], [0, 176]], 
+        "position": [106, 247], 
+        "type": "poly", 
+        "size": [106, 176]
+    }, 
+    {
+        "name": "WeldingShop", 
+        "color": [255, 0, 0], 
+        "position": [312, 95], 
+        "type": "rect", 
+        "size": [159, 90]
+    }, 
+    {
+        "name": "Steel", 
+        "color": [255, 128, 0], 
+        "holeList": [], 
+        "points": [[0, 0], [88, 0], [90, 0], [90, 111], [0, 111]], 
+        "position": [512, 299], 
+        "type": "poly", 
+        "size": [90, 111]
+    }
+]
+
+Transitions: # Region 1 Name, Region 2 Name, Bidirectional transition faces (face1_x1, face1_y1, face1_x2, face1_y2, face2_x1, ...)
+Stop3	Grass1	107	113	107	125	107	95	107	113
+Stop3	Road3	107	113	107	125	107	13	107	95	107	95	107	113
+Stop3	boundary	107	13	108	13	108	13	135	13	135	13	138	13
+Grass2	WeldingShop	471	95	471	185
+Grass2	Steel	512	299	600	299
+Grass1	Road3	107	113	107	125	107	125	107	248	107	95	107	113
+Grass1	WeldingShop	312	95	312	185
+Road3	boundary	94	13	107	13	33	13	94	13
+Stop2	boundary	566	13	597	13
+lake	Steel	512	299	512	410
+

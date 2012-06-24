@@ -1,0 +1,38 @@
+# This is a region definition file for the LTLMoP toolkit.
+# Format details are described at the beginning of each section below.
+# Note that all values are separated by *tabs*.
+
+Background: # Relative path of background image file
+None
+
+CalibrationPoints: # Vertices to use for map calibration: (vertex_region_name, vertex_index)
+
+Regions: # Name, Type, Pos X, Pos Y, Width, Height, Color R, Color G, Color B, Vertices (x1, y1, x2, y2, ...)
+boundary	poly	103	52	244	306	0	255	0	244	0	244	67	221	306	158	306	98	306	1	304	0	276	0	150	0	0	98	0	222	0
+r6	poly	261	298	63	60	176	0	255	0	0	2	0	63	0	63	60	0	60
+r5	poly	201	298	60	60	204	50	50	0	30	0	0	60	0	60	60	0	60
+exit2	poly	103	328	98	28	204	50	50	0	0	98	0	83	28	1	28
+exit1	poly	324	52	23	67	176	0	255	0	64	0	0	23	0	23	67
+r4	poly	201	116	123	182	0	255	0	0	86	0	0	123	0	123	182	62	182	60	182	0	182
+r3	rect	201	52	123	64	255	255	0
+r2	poly	103	202	98	126	0	0	255	0	0	97	0	98	0	98	96	98	126	0	126
+r1	poly	103	50	98	150	255	255	0	0	0	98	0	98	64	98	150	97	150	0	150
+
+Thumbnail: # Relative path of image file that has region shapes overlayed on background image
+YIP_simbg.png
+
+Transitions: # Region 1 Name, Region 2 Name, Bidirectional transition faces (face1_x1, face1_y1, face1_x2, face1_y2, face2_x1, ...)
+boundary	r6	261	358	324	358
+boundary	r5	201	358	261	358
+boundary	exit2	103	328	104	356
+boundary	exit1	325	52	347	52	347	52	347	119
+boundary	r2	103	202	103	328
+r6	r5	261	298	261	358
+r6	r4	261	298	263	298	263	298	324	298
+r5	r4	201	298	261	298
+r5	r2	201	298	201	328
+exit2	r2	103	328	201	328
+exit1	r3	324	52	324	116
+r4	r3	201	116	324	116
+r4	r2	201	202	201	298
+

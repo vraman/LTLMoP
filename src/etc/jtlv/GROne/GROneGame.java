@@ -101,7 +101,10 @@ public class GROneGame {
 		z2_mem = new BDD[50];	
 			
 		
-		this.player2_winning = this.calculate_win_FS();	//(system winning states)
+		if (fastslow)
+			this.player2_winning = this.calculate_win_FS();	//(system winning states FS)
+		else 
+			this.player2_winning = this.calculate_win();	//(system winning states)
 		this.player1_winning = this.player2_winning.not(); //(environment winning states)
 
 	}
@@ -210,7 +213,8 @@ public class GROneGame {
 			}
 		}
 		x_mem = extend_size(x_mem, 0);
-		y_mem = extend_size(y_mem, 0);					
+		y_mem = extend_size(y_mem, 0);	
+
 		return z.id();
 	}
 	

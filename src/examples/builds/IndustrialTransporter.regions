@@ -1,0 +1,130 @@
+# This is a region definition file for the LTLMoP toolkit.
+# Format details are described at the beginning of each section below.
+# Note that all values are separated by *tabs*.
+
+Background: # Relative path of background image file
+None
+
+CalibrationPoints: # Vertices to use for map calibration: (vertex_region_name, vertex_index)
+
+Obstacles: # Names of regions to treat as obstacles
+lake
+
+Regions: # Stored as JSON string
+[
+    {
+        "name": "Stop4", 
+        "color": [255, 0, 0], 
+        "holeList": [], 
+        "points": [[0, 0], [75, 0], [75, 3], [75, 6], [75, 7], [75, 10], [75, 15], [0, 15]], 
+        "position": [33, 109], 
+        "type": "poly", 
+        "size": [75, 15]
+    }, 
+    {
+        "name": "Stop3", 
+        "color": [255, 0, 0], 
+        "holeList": [], 
+        "points": [[0, 0], [32, 0], [32, 66], [28, 66], [0, 66]], 
+        "position": [108, 27], 
+        "type": "poly", 
+        "size": [32, 66]
+    }, 
+    {
+        "name": "Stop1", 
+        "color": [204, 50, 50], 
+        "holeList": [], 
+        "points": [[0, 2], [0, 1], [0, 0], [98, 0], [98, 23], [0, 23]], 
+        "position": [600, 91], 
+        "type": "poly", 
+        "size": [98, 23]
+    }, 
+    {
+        "name": "Steel", 
+        "color": [255, 0, 128], 
+        "holeList": [], 
+        "points": [[0, 112], [0, 111], [0, 1], [0, 0], [87, 0], [88, 0], [88, 243], [87, 243], [0, 243]], 
+        "position": [512, 298], 
+        "type": "poly", 
+        "size": [88, 243]
+    }, 
+    {
+        "name": "WeldingShop", 
+        "color": [255, 128, 0], 
+        "holeList": [], 
+        "points": [[0, 90], [0, 0], [159, 0], [159, 1], [159, 90], [159, 91], [0, 91]], 
+        "position": [313, 94], 
+        "type": "poly", 
+        "size": [159, 91]
+    }, 
+    {
+        "name": "Grass2", 
+        "color": [0, 255, 0], 
+        "holeList": [], 
+        "points": [[0, 92], [0, 91], [0, 2], [0, 1], [0, 0], [100, 0], [128, 0], [128, 21], [128, 205], [127, 205], [40, 205], [39, 205], [0, 205]], 
+        "position": [472, 93], 
+        "type": "poly", 
+        "size": [128, 205]
+    }, 
+    {
+        "name": "AssemblyShop", 
+        "color": [204, 50, 50], 
+        "holeList": [], 
+        "points": [[0, 173], [0, 0], [104, 0], [104, 295], [102, 295], [0, 295]], 
+        "position": [108, 247], 
+        "type": "poly", 
+        "size": [104, 295]
+    }, 
+    {
+        "name": "Stop2", 
+        "color": [255, 0, 0], 
+        "holeList": [], 
+        "points": [[0, 0], [27, 0], [28, 0], [28, 1], [28, 65], [28, 66], [28, 67], [0, 67]], 
+        "position": [572, 26], 
+        "type": "poly", 
+        "size": [28, 67]
+    }, 
+    {
+        "name": "boundary", 
+        "color": [0, 255, 0], 
+        "holeList": [], 
+        "points": [[0, 513], [0, 97], [0, 82], [0, 66], [0, 0], [75, 0], [107, 0], [539, 0], [540, 0], [567, 0], [568, 0], [664, 0], [664, 514], [568, 514], [567, 514], [566, 514], [479, 514], [478, 514], [0, 514]], 
+        "position": [33, 27], 
+        "type": "poly", 
+        "size": [664, 514]
+    }, 
+    {
+        "name": "Grass1", 
+        "color": [0, 255, 0], 
+        "holeList": [], 
+        "points": [[0, 34], [0, 33], [0, 30], [0, 25], [0, 22], [0, 21], [0, 18], [0, 15], [0, 7], [0, 4], [0, 3], [0, 0], [205, 0], [205, 90], [205, 91], [205, 153], [104, 153], [0, 153]], 
+        "position": [108, 94], 
+        "type": "poly", 
+        "size": [205, 153]
+    }, 
+    {
+        "name": "lake", 
+        "color": [0, 128, 255], 
+        "holeList": [], 
+        "points": [[0, 0], [302, 0], [302, 113], [302, 114], [302, 115], [302, 225], [302, 226], [302, 357], [302, 358], [2, 358], [0, 358]], 
+        "position": [210, 184], 
+        "type": "poly", 
+        "size": [302, 358]
+    }
+]
+
+Transitions: # Region 1 Name, Region 2 Name, Bidirectional transition faces (face1_x1, face1_y1, face1_x2, face1_y2, face2_x1, ...)
+Stop4	boundary	33	109	33	124
+Stop4	Grass1	108	109	108	112	108	112	108	115	108	116	108	119	108	119	108	124	108	115	108	116
+Stop3	boundary	108	27	140	27
+Stop1	Grass2	600	93	600	114
+Stop1	Stop2	600	91	600	92	600	92	600	93
+Steel	Grass2	599	298	600	298	512	298	599	298
+Steel	boundary	512	541	599	541	599	541	600	541
+Steel	lake	512	410	512	541	512	298	512	299	512	299	512	409	512	409	512	410
+WeldingShop	Grass2	472	95	472	184	472	184	472	185	472	94	472	95
+WeldingShop	Grass1	313	94	313	184	313	184	313	185
+Grass2	Stop2	572	93	600	93
+AssemblyShop	Grass1	108	247	212	247
+AssemblyShop	lake	210	542	212	542
+
