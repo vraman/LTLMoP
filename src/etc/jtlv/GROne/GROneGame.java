@@ -63,7 +63,7 @@ public class GROneGame {
 		z2_mem = new BDD[50];	
 		
 		//
-		this.player2_winning = this.calculate_win();	//(system winning states)
+		this.player2_winning = this.calculate_win_FS();	//(system winning states)
 		this.player1_winning = this.calculate_loss();   //(environment winning states)
 		//this.player1_winning = this.player2_winning.not(); //commented out after counterstrategy addition - VR
 
