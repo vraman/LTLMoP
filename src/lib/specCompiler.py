@@ -20,6 +20,7 @@ from parseEnglishToLTL import bitEncoding, replaceRegionName, createStayFormula
 import fsa
 from copy import deepcopy
 from coreUtils import *
+from find_all_cycles import *
 
 # Hack needed to ensure there's only one
 _SLURP_SPEC_GENERATOR = None
@@ -603,13 +604,17 @@ class SpecCompiler(object):
         desiredGoal = [h_item[2] for h_item in to_highlight if h_item[1] == "goals"]
         
         
+        
         if desiredGoal:
             desiredGoal = desiredGoal[0]
             #Don't actually need LTL        
             #desiredGoalLTL = stripLTLLine(self.ltlConjunctsFromBadLines([h_item for h_item in to_highlight if h_item[1] == "goals"], False)[0],True)
         
+        cycles = find_all_cycles(aut.states)
         
-            
+        
+        
+        
         def preventsDesiredGoal(s):
                 rank_str = s.transitions[0].rank
                 m = re.search(r"\(\d+,(-?\d+)\)", rank_str)
@@ -618,28 +623,47 @@ class SpecCompiler(object):
                     return
                 jx = int(m.group(1))         
                 return (jx == desiredGoal)
-                    
         
-        #find livelocked states in the automaton (states with desired sys rank)           
+        def sublistExists(list1, list2):
+            return ''.join(map(str, list2)) in ''.join(map(str, list1))
+        
+        desiredGoalCycles = []
+        desiredGoalCycles = [c for c in cycles if all(map(preventsDesiredGoal, c)) and not any(map(lambda x: sublistExists(x, c), [x for x in cycles if x!=c]))]
+        
+              
+        
+        #print [[s.name for s in c] for c in desiredGoalCycles]
+        #forceDesiredGoalCycles = [[fro]+c[0:4] for c in desiredGoalCycles for fro in aut.states for to in c if (to in fro.transitions and fro not in c)]
+        forceDesiredGoalCycles = desiredGoalCycles   
+        #forceDesiredGoalCycles = [[aut.states[1],aut.states[2]], [aut.states[2],aut.states[1]]]
+        cycles = forceDesiredGoalCycles
+        cycleStates = [s for c in desiredGoalCycles for s in c]
+        
+        '''#find livelocked states in the automaton (states with desired sys rank)           
         livelockedStates = filter(preventsDesiredGoal, [s for s in aut.states if s.transitions])
         #find states that can be forced by the environment into the livelocked set
-        forceLivelockedStates = [(fro, to) for fro in aut.states for to in livelockedStates if to in s.transitions]
+        forceLivelockedStates = [(fro, to) for fro in aut.states for to in livelockedStates if to in fro.transitions and (to not in cycleStates or fro not in cycleStates)]
         
         #LTL representation of these states and the livelocked goal  
         #forceLivelockLTL = map(lambda s: " & ".join([stateToLTL(s), desiredGoalLTL]), livelockedStates) ###Don't actually need to add goal -- will be added in 'conjuncts'
         forceLivelockLTL = map(lambda (s1,s2): " & ".join([stateToLTL(s1, 1, 1), stateToLTL(s2, 1, 0, True)]), forceLivelockedStates)
         #forceLivelockLTL = map(stateToLTL, livelockedStates)
+        '''
         
         numStates = len(aut.states)
         numRegions = len(self.parser.proj.rfi.regions)
         
         if forceDeadlockLTL:
             deadlockFlag = True
+            extra = []
             badStatesLTL = forceDeadlockLTL
         else:
             #this means livelock
-            deadlockFlag = False            
-            badStatesLTL = forceLivelockLTL
+            deadlockFlag = False     
+            maxDepth = 15
+            extra = map(lambda x: stateCycleToCNFs(x, self.propList, maxDepth), forceDesiredGoalCycles)  
+            #print [[s.name for s in c] for c in desiredGoalCycles] 
+            badStatesLTL = badInit#forceLivelockLTL
             
         #################################
         #                               #
@@ -658,14 +682,14 @@ class SpecCompiler(object):
         conjuncts = self.ltlConjunctsFromBadLines(to_highlight, useInitFlag)
         
         #filter out props that are actually used
-        self.propList = [p for p in self.propList if [c for c in conjuncts if p in c] or [c for c in badStatesLTL if p in c and not unsat] or p in topo]
+        #self.propList = [p for p in self.propList if [c for c in conjuncts if p in c] or [c for c in badStatesLTL if p in c and not unsat] or p in topo]
                     
         cmd = self._getPicosatCommand() 
             
-        if unsat:
+        if False:
             guilty = self.unsatCores(cmd, topo,badInit,conjuncts,15,15)#returns LTL  
         else:
-            guilty = self.unrealCores(cmd, topo, badStatesLTL, conjuncts, deadlockFlag)#returns LTL   
+            guilty = self.unrealCores(cmd, topo,badInit, badStatesLTL, conjuncts, deadlockFlag, extra,forceDesiredGoalCycles)#returns LTL   
         return guilty
         
         
@@ -687,7 +711,7 @@ class SpecCompiler(object):
                 
     
         
-    def unrealCores(self, cmd, topo, badStatesLTL, conjuncts, deadlockFlag):
+    def unrealCores(self, cmd, topo, badInit, badStatesLTL, conjuncts, deadlockFlag, extra, cycles):
         #returns list of guilty LTL formulas FOR THE UNREALIZABLE CASE
         #takes LTL formulas representing the topology and other highlighted conjuncts as in the unsat case.
         #also takes a list of deadlocked/livelocked states (as LTL/propositional formulas)        
@@ -697,10 +721,10 @@ class SpecCompiler(object):
         #try the different cases of unsatisfiability (need to pass in command and proplist to coreUtils function)
         if deadlockFlag:
             initDepth = 1
-            maxDepth = 1            
+            maxDepth = 1       
         else:
             initDepth = 1
-            maxDepth = 1                             
+            maxDepth = 15                       
         
 #        TODO: see if there is a way to call pool.map with processes that also use pools
 #
@@ -712,7 +736,14 @@ class SpecCompiler(object):
 #        
 #        sys.stdout = sys.__stdout__
 
-        guiltyList = map(lambda d: unsatCoreCases(cmd, self.propList, topo, d, conjuncts, initDepth, maxDepth), badStatesLTL)
+
+        if deadlockFlag:
+            guiltyList = map(lambda d: unsatCoreCases(cmd, self.propList, topo, d, conjuncts, maxDepth, initDepth), badStatesLTL)
+        else:     
+            guiltyList = map(lambda c: unsatCoreCases(cmd, self.propList, topo, stateToLTL(c[1][0]), conjuncts, maxDepth, initDepth, c[0]), zip(extra,cycles))
+            
+            #guiltyList.extend(map(lambda d: unsatCoreCases(cmd, self.propList, topo, d, conjuncts, maxDepth, initDepth), badStatesLTL))
+            
         
         guilty = reduce(set.union,map(set,[g for t, g in guiltyList]))
                  
@@ -763,7 +794,7 @@ class SpecCompiler(object):
                 newCs = [goals[h_item[2]]]
                 newCsOld = newCs
                 
-            elif h_item[1] == "trans" or h_item[1] == "init" and useInitFlag:
+            elif h_item[1] == "trans" or (h_item[1] == "init" and useInitFlag):
                 newCs =  self.spec[tb_key].replace("\t", "\n").split("\n")
                 
             conjuncts.extend(newCs)
