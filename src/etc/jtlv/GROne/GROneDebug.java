@@ -82,6 +82,26 @@ public class GROneDebug {
 		String debugInfo = ""; //will eventually contain all debugging statements to be displayed
 		
 			
+		//Fixpoint computation to determine diameter of game graph from each initial state
+		BDD ini = Env.TRUE().satOne(env.moduleUnprimeVars().union(sys.moduleUnprimeVars()),true);
+              
+		BDD reachedAll = Env.FALSE();
+		
+		int sumOfD = 0;
+		while (!ini.isZero()) {
+            BDD reached = ini;   
+			for (iter = new FixPoint<BDD>(); iter.advance(reached);) {			 
+				reached = reached.or(env.succ(reached).and(sys.succ(reached)));
+				sumOfD +=1;
+			}
+			reachedAll = reachedAll.or(reached);
+			ini = ((reachedAll.not())).satOne(env.moduleUnprimeVars().union(sys.moduleUnprimeVars()), true);
+			
+		}
+		
+		System.out.println("Sum of Diameters = "+ sumOfD);
+		
+		 
 		 //Fixpoint computation to determine reachability of environment deadlock states
 		 BDD cox = Env.FALSE();
 		 for (iter = new FixPoint<BDD>(); iter.advance(cox);) {			 

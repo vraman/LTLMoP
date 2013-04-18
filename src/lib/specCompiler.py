@@ -662,7 +662,7 @@ class SpecCompiler(object):
             deadlockFlag = False     
             maxDepth = 15
             extra = map(lambda x: stateCycleToCNFs(x, self.propList, maxDepth), forceDesiredGoalCycles)  
-            #print [[s.name for s in c] for c in desiredGoalCycles] 
+            print [[s.name for s in c] for c in forceDesiredGoalCycles] 
             badStatesLTL = badInit#forceLivelockLTL
             
         #################################
@@ -686,7 +686,7 @@ class SpecCompiler(object):
                     
         cmd = self._getPicosatCommand() 
             
-        if False:
+        if unsat:
             guilty = self.unsatCores(cmd, topo,badInit,conjuncts,15,15)#returns LTL  
         else:
             guilty = self.unrealCores(cmd, topo,badInit, badStatesLTL, conjuncts, deadlockFlag, extra,forceDesiredGoalCycles)#returns LTL   
@@ -724,7 +724,7 @@ class SpecCompiler(object):
             maxDepth = 1       
         else:
             initDepth = 1
-            maxDepth = 15                       
+            maxDepth = 2                       
         
 #        TODO: see if there is a way to call pool.map with processes that also use pools
 #
@@ -735,7 +735,7 @@ class SpecCompiler(object):
 #        pool.terminate()
 #        
 #        sys.stdout = sys.__stdout__
-
+        print deadlockFlag
 
         if deadlockFlag:
             guiltyList = map(lambda d: unsatCoreCases(cmd, self.propList, topo, d, conjuncts, maxDepth, initDepth), badStatesLTL)
