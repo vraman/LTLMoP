@@ -1,23 +1,24 @@
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
 import java.util.Stack;
 import java.util.Vector;
 
 import net.sf.javabdd.BDD;
-import net.sf.javabdd.BDDVarSet;
 import net.sf.javabdd.BDD.BDDIterator;
+import net.sf.javabdd.BDDVarSet;
 import edu.wis.jtlv.env.Env;
-import edu.wis.jtlv.env.module.ModuleWithWeakFairness;
 import edu.wis.jtlv.env.module.Module;
+import edu.wis.jtlv.env.module.ModuleBDDField;
+import edu.wis.jtlv.env.module.ModuleWithWeakFairness;
 import edu.wis.jtlv.lib.FixPoint;
 import edu.wis.jtlv.old_lib.games.GameException;
-import edu.wis.jtlv.env.module.ModuleBDDField;
 
 /** 
  * <p>
  * To execute, create an object with two Modules, one for the system and the
  * other for the environment, and then just extract the strategy/counterstrategy 
- * via the printWinningStrategy() and printLosingStrategy() methods.
- * </p>
+ * via the printWinnin,
  * 
  * @author Yaniv Sa'ar, Vasumathi Raman, Cameron Finucane)
  * 
@@ -26,6 +27,7 @@ public class GROneGame {
 	private ModuleWithWeakFairness env;
 	private ModuleWithWeakFairness sys;
 	int sysJustNum, envJustNum;
+	@SuppressWarnings("unused")
 	private BDD player1_winning;
 	private BDD player2_winning;
 
@@ -75,6 +77,7 @@ public class GROneGame {
 	public BDD[][][][] x2_mem;
 	public BDD[][] y_mem, y2_mem;
 	public BDD[] z_mem, z2_mem;
+	private BDDVarSet nonRegionProps;
 
 	/**
 	 * <p>
@@ -83,6 +86,7 @@ public class GROneGame {
 	 * 
 	 * @return The Player-2 winning states for this game.
 	 */
+	@SuppressWarnings("unused")
 	private BDD calculate_win() {
 		BDD x, y, z;
 		FixPoint<BDD> iterZ, iterY, iterX;
@@ -102,16 +106,13 @@ public class GROneGame {
 					for (int i = 0; i < envJustNum; i++) {
 						BDD negp = env.justiceAt(i).not();
 						x = z.id();
-						int ig = 0;
 						for (iterX = new FixPoint<BDD>(); iterX.advance(x);) {
 							x = negp.and(env.yieldStates(sys,x)).or(start);
 						}
 						x_mem[j][i][cy] = x.id();
-						//System.out.println("X ["+ j + ", " + i + ", " + cy + "] = " + x_mem[j][i][cy]);
 						y = y.id().or(x);
 					}
 					y_mem[j][cy] = y.id();
-					//System.out.println("Y ["+ j + "] = " + y_mem[j][cy]);													
 					cy++;
 					if (cy % 50 == 0) {
 						x_mem = extend_size(x_mem, cy);
@@ -120,7 +121,6 @@ public class GROneGame {
 				}
 				z = y.id();
 				z_mem[j] = z.id();
-				//System.out.println("Z ["+ j + " ] = " + z_mem[j]);					
 			}
 		}
 		x_mem = extend_size(x_mem, 0);
@@ -163,14 +163,12 @@ public class GROneGame {
 						BDD negp = env.justiceAt(i).not();
 						x = z.id();
 						for (iterX = new FixPoint<BDD>(); iterX.advance(x);) {
-							x = this.yieldStatesNext(env,sys,envPrimedVars,sysPrimedVars, negp.and(Env.prime(x)).or(start));			    
+							x = this.yieldStatesNext(env,sys,envPrimedVars,sysPrimedVars, negp.and(Env.prime(x)).or(start));
 						}
 						x_mem[j][i][cy] = x.id();
-						//System.out.println("X ["+ j + ", " + i + ", " + cy + "] = " + x_mem[j][i][cy]);
 						y = y.id().or(x);
 					}
 					y_mem[j][cy] = y.id();
-					//System.out.println("Y ["+ j + "] = " + y_mem[j][cy]);													
 					cy++;
 					if (cy % 50 == 0) {
 						x_mem = extend_size(x_mem, cy);
@@ -179,7 +177,6 @@ public class GROneGame {
 				}
 				z = y.id();
 				z_mem[j] = z.id();
-				//System.out.println("Z ["+ j + " ] = " + z_mem[j]);					
 			}
 		}
 		x_mem = extend_size(x_mem, 0);
@@ -193,6 +190,7 @@ public class GROneGame {
 		return challenger.trans().imp(exy).forAll(challengerPrime);
 	}
 
+	@SuppressWarnings("unused")
 	private BDD[][][][] extend_size(BDD[][][][] in, int extended_size) {
 		BDD[][][][] res;
 		if (extended_size > 0) {
@@ -298,6 +296,7 @@ public class GROneGame {
 		return res;
 	}
 
+	@SuppressWarnings("unused")
 	private BDD[] extend_size(BDD[] in, int extended_size) {
 		BDD[] res;		
 		if (extended_size > 0) {
@@ -369,234 +368,84 @@ public class GROneGame {
 
 	public void calculate_strategy(int kind, BDD ini) {
 		int strategy_kind = kind;
-		Stack<BDD> st_stack = new Stack<BDD>();
-		Stack<Integer> j_stack = new Stack<Integer>();
+		Stack<RawState> pending = new Stack<RawState>();
+		Set<RawState> visited = new HashSet<RawState>();
 		Stack<RawState> aut = new Stack<RawState>();
 
-		// Create a varset of all non-location propositions
-		// (used later to prevent inefficient wobbling when
-		// multiple goals are satisfied in the same location)
-		//
-		// TODO: There is probably a cleaner way to do this
-		ModuleBDDField [] allFields = sys.getAllFields();        
-		BDDVarSet nonRegionProps = Env.getEmptySet();
-		for (int i = 0; i < allFields.length; i++) {      
-			ModuleBDDField thisField = allFields[i];
-			String fieldName = thisField.support().toString();
-			if (!fieldName.startsWith("<bit"))
-				nonRegionProps = nonRegionProps.union(thisField.support());
-		}
+		setNonRegionProps();
 
+		addAllInitialStates(pending,visited,aut,ini);
 
-		BDDIterator ini_iterator = ini.iterator(env.moduleUnprimeVars().union(sys.moduleUnprimeVars()));
-		while (ini_iterator.hasNext()) {
-			BDD this_ini = (BDD) ini_iterator.next();
+		// iterating over the pending.
+		while (!pending.isEmpty()) {
+			// making a new entry.
+			RawState currentState = pending.pop();
 
-			RawState test_st = new RawState(aut.size(), this_ini, 0);
+			/* 
+			 * Create a new automaton state for our current state 
+			 * (or use a matching one if it already exists) 
+			 * p_st is the current state value,
+			 * and p_j is the system goal currently being pursued.
+			 * cf. RawState class definition below.
+			 */
+			int yRank = findYRank(currentState);
+			assert yRank >= 0 : "Couldn't find y rank";
 
-			int idx = -1;
-			for (RawState cmp_st : aut) {
-				if (cmp_st.equals(test_st, false)) { // search ignoring rank
-					idx = aut.indexOf(cmp_st);
-					break;
-				}
-			}
+			int xRank = findXRank(currentState, yRank);
+			assert xRank >= 0 : "Couldn't find x rank";
 
-			if (idx != -1) {
-				// This initial state is already in the automaton
-				continue;
-			}
+			Vector<BDD> succs = getEnvSuccessors(currentState);
 
-			// Otherwise, we need to attach this initial state to the automaton
+			// For each env successor, find a strategy successor
+			for (Iterator<BDD> iter_succ = succs.iterator(); iter_succ
+					.hasNext();) {
+				BDD primed_cur_succ = Env.prime(iter_succ.next());
+				BDD sysSucc = Env
+						.unprime(sys.trans().and(currentState.get_state()).and(primed_cur_succ)
+								.exist(
+										env.moduleUnprimeVars().union(
+												sys.moduleUnprimeVars()))).and(player2_winning);
+				// System.out.println("Searching what to do with: " + next_op);
 
-			st_stack.push(this_ini);
-			j_stack.push(new Integer(0)); // TODO: is there a better default j?
-			//this_ini.printSet();
-
-			// iterating over the stacks.
-			while (!st_stack.isEmpty()) {
-				// making a new entry.
-				BDD p_st = st_stack.pop();
-				int p_j = j_stack.pop().intValue();
-
-				/* 
-				 * Create a new automaton state for our current state 
-				 * (or use a matching one if it already exists) 
-				 * p_st is the current state value,
-				 * and p_j is the system goal currently being pursued.
-				 * cf. RawState class definition below.
-				 */
-				RawState new_state = new RawState(aut.size(), p_st, p_j);
-				int nidx = aut.indexOf(new_state);
-				if (nidx == -1) {
-					aut.push(new_state);
-				} else {
-					new_state = aut.elementAt(nidx);
-				}
-
-				/* Find Y index of current state */
-				// find minimal cy and an i
-				int p_cy = -1;
-				for (int i = 0; i < y_mem[p_j].length; i++) {
-					if (!p_st.and(y_mem[p_j][i]).isZero()) {
-						p_cy = i;
-						break;
-					}
-				}
-
-				assert p_cy >= 0 : "Couldn't find p_cy";
-				/* Find  X index of current state */
-				int p_i = -1;
-				for (int i = 0; i < envJustNum; i++) {
-					if (!p_st.and(x_mem[p_j][i][p_cy]).isZero()) {
-						p_i = i;
-						break;
-					}
-				}
-				assert p_i >= 0 : "Couldn't find p_i";
-
-				// computing the set of env possible successors.
-				Vector<BDD> succs = new Vector<BDD>();
-				BDD all_succs =  env.succ(p_st);
-
-				for (BDDIterator all_states = all_succs.iterator(env
-						.moduleUnprimeVars()); all_states.hasNext();) {
-					BDD sin = (BDD) all_states.next();
-					succs.add(sin);
-				}
-
-				BDD candidate = Env.FALSE();
-				// For each env successor, find a strategy successor
-				for (Iterator<BDD> iter_succ = succs.iterator(); iter_succ
-						.hasNext();) {
-					BDD primed_cur_succ = Env.prime(iter_succ.next());
-					BDD next_op = Env.unprime(sys.trans().and(p_st).and(primed_cur_succ)
-							.exist(
-									env.moduleUnprimeVars().union(
-											sys.moduleUnprimeVars()))).and(this.player2_winning);
-					System.out.println("Searching what to do with: " + next_op);
-
-					candidate = Env.FALSE();
-					int jcand = p_j;
-
-					int local_kind = strategy_kind;
-					while (candidate.isZero() & (local_kind >= 0)) {
-						// a - first successor option in the strategy.
-						// (rho_1 in Piterman; satisfy current goal and move to next goal)
-						if ((local_kind == 3) | (local_kind == 7)
-								| (local_kind == 10) | (local_kind == 13)
-								| (local_kind == 18) | (local_kind == 21)) {
-							BDD trans = p_st.and(Env.prime(next_op));			    
-							BDD trans_and_just = trans.and(sys.justiceAt(p_j));
-							if (!trans_and_just.isZero()) {
-								int next_p_j = (p_j + 1) % sysJustNum;   
-								// Cycle through goals that are trivially satisfied by staying in the exact same state.
-								// (This is essentially stutter-state removal)
-								while (!trans_and_just.and(sys.justiceAt(next_p_j)).isZero() && next_p_j != p_j) {
-									trans_and_just = trans_and_just.and(sys.justiceAt(next_p_j));
-									next_p_j = (next_p_j + 1) % sysJustNum;
-								}
-
-								BDD next_of_trans_and_just = Env.unprime(trans_and_just.exist(sys.moduleUnprimeVars()).exist(env.moduleUnprimeVars())); 
-								//BDD next_of_trans = Env.unprime(trans.exist(sys.moduleUnprimeVars()).exist(env.moduleUnprimeVars())); 
-
-								// Find the lowest-rank transitionable state in the direction of the next unsatisfied goal
-								// (or just stay in the same y-set if we've looped all the way around)
-								int look_r = 0;
-								while ((next_of_trans_and_just.and(y_mem[next_p_j][look_r]).isZero())) {
-									//while ((next_of_trans.and(y_mem[next_p_j][look_r]).isZero())) {
-									look_r++;
-								}
-
-								BDD opt = next_of_trans_and_just.and(y_mem[next_p_j][look_r]);
-								//BDD opt = next_of_trans.and(y_mem[next_p_j][look_r]);
-								if (!opt.isZero()) {
-									candidate = opt;
-									System.out.println("1");
-									jcand = next_p_j;
-								}
-
-								// If possible, trim down the candidates to prioritize movement-less transitions
-								BDD current_region = p_st.exist(env.moduleUnprimeVars()).exist(nonRegionProps);
-								if (!candidate.and(current_region).isZero()) {
-									candidate = candidate.and(current_region); 
-								}
-							}
-
-						}                       
-						// b - second successor option in the strategy.
-						// (rho_2 in Piterman; move closer to current goal)
-						if ((local_kind == 2) | (local_kind == 5)
-								| (local_kind == 11) | (local_kind == 15)
-								| (local_kind == 17) | (local_kind == 22)) {
-							if (p_cy > 0) {
-								int look_r = 0;
-								// look for the further most r.
-								while ((next_op.and(y_mem[p_j][look_r]).isZero())
-										& (look_r < p_cy)) {
-									look_r++;
-								}
-
-								BDD opt = next_op.and(y_mem[p_j][look_r]);
-								if ((look_r != p_cy) && (!opt.isZero())) {
-									candidate = opt;  
-									System.out.println("2");
-								}
-							}
-						}
-
-						// c - third successor option in the strategy.
-						// (rho_3 in Piterman; falsify environment :()
-						if ((local_kind == 1) | (local_kind == 6)
-								| (local_kind == 9) | (local_kind == 14)
-								| (local_kind == 19) | (local_kind == 23)) {
-							BDD trans = p_st.and(Env.prime(next_op));
-							BDD trans_and_not_just = trans.and(env.justiceAt(p_i).not());
-							if (!trans_and_not_just.isZero()) {
-								BDD next_of_trans_and_not_just = Env.unprime(trans_and_not_just.exist(sys.moduleUnprimeVars()).exist(env.moduleUnprimeVars()));
-								BDD opt = next_of_trans_and_not_just.and(x_mem[p_j][p_i][p_cy]);
-								if (!opt.isZero()) {
-									candidate = opt;
-									System.out.println("3");
-								}
-							}
-						}
-
-						// no successor was found yet.
-						//assert ((local_kind != 0) & (local_kind != 4)
-						if (!((local_kind != 0) & (local_kind != 4)
-								& (local_kind != 8) & (local_kind != 12)
-								& (local_kind != 16) & (local_kind != 20))) {
-							System.out.println("No successor was found");
-							candidate = (next_op).and(y_mem[p_j][p_cy]);	
-							assert !(candidate.isZero()) : "No successor was found";
-
-						}
-
-						local_kind--;
+				int local_kind = strategy_kind;
+				RawState nextState = null;
+				do {
+					// a - first successor option in the strategy.
+					// (rho_1 in Piterman; satisfy current goal and move to next goal)
+					if (search_for_z_succ(local_kind)) {
+						nextState = visit_z(currentState,yRank, xRank, sysSucc);
+					}                       
+					// b - second successor option in the strategy.
+					// (rho_2 in Piterman; move closer to current goal)
+					else if (search_for_y_succ(local_kind)) {
+						nextState = improve_y_rank(currentState, yRank, xRank, sysSucc);
 					}
 
-
-					//BDD one_cand = candidate.satOne();
-
-					
-					BDDIterator candIter = candidate.iterator(env.moduleUnprimeVars().union(
-                            sys.moduleUnprimeVars())); 
-                    BDD one_cand = (BDD) candIter.next();
-                                   
-                    					
-
-					RawState gsucc = new RawState(aut.size(), one_cand, jcand);
-					idx = aut.indexOf(gsucc); // the equals doesn't consider
-					// the id number.
-					if (idx == -1) {
-						st_stack.push(one_cand);
-						j_stack.push(jcand);
-						aut.add(gsucc);
-						idx = aut.indexOf(gsucc);
+					// c - third successor option in the strategy.
+					// (rho_3 in Piterman; falsify environment :()
+					else if (search_for_x_succ(local_kind)) {
+						nextState = keep_x_rank(currentState, yRank, xRank,sysSucc);
 					}
-					new_state.add_succ(aut.elementAt(idx));
-					System.out.println("added " + this + " as succcesoor of that.");
+
+					// no successor was found yet.
+					//assert ((local_kind != 0) & (local_kind != 4)
+					else if (search_for_no_progress(local_kind)) {
+						// System.out.println("No successor was found");
+						nextState = no_progress(currentState, yRank, xRank, sysSucc);	
+						assert !(nextState.get_state().isZero()) : "No successor was found";
+
+					}
+
+					local_kind--;
+				} while ((nextState == null || nextState.get_state().isZero()) && (local_kind >= 0)); 
+
+				nextState.satOne(); 
+
+				nextState = addStateToAutomaton(aut,nextState);
+				currentState.add_succ(nextState);
+				if (!visited.contains(nextState)) {
+					pending.add(nextState);
+					visited.add(nextState);
 				}
 			}
 		}
@@ -635,12 +484,13 @@ public class GROneGame {
 	  System.out.println("Removed " + num_removed + " stutter states.");
 
 		 */
+		printAutomaton(aut);
 
-		/* Print output */
+	}
 
 
 
-
+	private void printAutomaton(Stack<RawState> aut) {
 		String res = "";
 
 		for (RawState state : aut) {
@@ -651,12 +501,206 @@ public class GROneGame {
 
 		System.out.print("\n\n");
 		System.out.print(res);
-		// return null; // res;
 		System.out.print("\n\n");
-
 	}
 
 
+
+	private boolean search_for_no_progress(int local_kind) {
+		return !((local_kind != 0) && (local_kind != 4)
+				& (local_kind != 8) && (local_kind != 12)
+				& (local_kind != 16) && (local_kind != 20));
+	}
+
+
+
+	private boolean search_for_x_succ(int local_kind) {
+		return (local_kind == 1) || (local_kind == 6)
+				| (local_kind == 9) || (local_kind == 14)
+				| (local_kind == 19) || (local_kind == 23);
+	}
+
+
+
+	private boolean search_for_y_succ(int local_kind) {
+		return (local_kind == 2) || (local_kind == 5)
+				| (local_kind == 11) || (local_kind == 15)
+				| (local_kind == 17) || (local_kind == 22);
+	}
+
+
+
+	private boolean search_for_z_succ(int local_kind) {
+		return (local_kind == 3) || (local_kind == 7)
+				| (local_kind == 10) || (local_kind == 13)
+				| (local_kind == 18) || (local_kind == 21);
+	}
+
+
+
+	private Vector<BDD> getEnvSuccessors(RawState state) {
+		// computing the set of env possible successors.
+		Vector<BDD> succs = new Vector<BDD>();
+		BDD all_succs =  env.succ(state.get_state());
+
+		for (BDDIterator all_states = all_succs.iterator(env
+				.moduleUnprimeVars()); all_states.hasNext();) {
+			BDD sin = (BDD) all_states.next();
+			succs.add(sin);
+		}
+		return succs;
+	}
+
+
+
+	private int findXRank(RawState currentState, int p_cy) {
+		/* Find  X index of current state */
+		int p_i = -1;
+		for (int i = 0; i < envJustNum; i++) {
+			if (!currentState.get_state().and(x_mem[currentState.get_rank()][i][p_cy]).isZero()) {
+				p_i = i;
+				break;
+			}
+		}
+		return p_i;
+	}
+
+
+
+	private int findYRank(RawState currentState) {
+		/* Find Y index of current state */
+		// find minimal cy and an i
+		int p_cy = -1;
+		for (int i = 0; i < y_mem[currentState.get_rank()].length; i++) {
+			if (!currentState.get_state().and(y_mem[currentState.get_rank()][i]).isZero()) {
+				p_cy = i;
+				break;
+			}
+		}
+		return p_cy;
+	}
+
+
+	private RawState addStateToAutomaton(Stack<RawState> aut, RawState new_state) {
+		int nidx = aut.indexOf(new_state);
+		if (nidx == -1) {
+			aut.push(new_state);
+			nidx = aut.indexOf(new_state);
+			new_state.set_id(nidx);
+			return new_state;
+		}
+		else {
+			return aut.elementAt(nidx);
+		}
+	}
+	
+	private void setNonRegionProps() {
+		// Create a varset of all non-location propositions
+		// (used later to prevent inefficient wobbling when
+		// multiple goals are satisfied in the same location)
+		//
+		// TODO: There is probably a cleaner way to do this
+
+		ModuleBDDField [] allFields = sys.getAllFields();        
+		this.nonRegionProps = Env.getEmptySet();
+		for (int i = 0; i < allFields.length; i++) {      
+			ModuleBDDField thisField = allFields[i];
+			String fieldName = thisField.support().toString();
+			if (!fieldName.startsWith("<bit"))
+				this.nonRegionProps = this.nonRegionProps.union(thisField.support());
+		}
+	}
+
+
+
+	private void addAllInitialStates(Stack<RawState> pending, Set<RawState> visited, Stack<RawState> aut, BDD ini) {
+		BDDIterator ini_iterator = ini.iterator(env.moduleUnprimeVars().union(sys.moduleUnprimeVars()));
+		while (ini_iterator.hasNext()) {
+			BDD this_ini = (BDD) ini_iterator.next();
+			RawState state = addStateToAutomaton(aut, this_ini, 0);			
+			pending.push(state);
+			visited.add(state);
+		}
+	}
+
+
+	private RawState addStateToAutomaton(Stack<RawState> aut, BDD state, int rank) {
+		RawState autState = new RawState(aut.size(), state, rank);
+		autState = this.addStateToAutomaton(aut, autState);
+		return autState;
+	}
+
+
+
+	private RawState visit_z(RawState current, int y_rank, int env_j, BDD next_state) { 
+		BDD trans = current.get_state().and(Env.prime(next_state));
+		BDD trans_and_just = trans.and(sys.justiceAt(current.get_rank()));
+		if (!trans_and_just.isZero()) {
+			int next_p_j = (current.get_rank() + 1) % sysJustNum;   
+			// Cycle through goals that are trivially satisfied by staying in the exact same state.
+			// (This is essentially stutter-state removal)
+			while (!trans_and_just.and(sys.justiceAt(next_p_j)).isZero() && next_p_j != current.get_rank()) {
+				trans_and_just = trans_and_just.and(sys.justiceAt(next_p_j));
+				next_p_j = (next_p_j + 1) % sysJustNum;
+			}
+
+			BDD next_of_trans_and_just = Env.unprime(trans_and_just.exist(sys.moduleUnprimeVars()).exist(env.moduleUnprimeVars())); 
+			// Find the lowest-rank transitionable state in the direction of the next unsatisfied goal
+			// (or just stay in the same y-set if we've looped all the way around)
+			int look_r = 0;
+			while ((next_of_trans_and_just.and(y_mem[next_p_j][look_r]).isZero())) {
+				look_r++;
+			}
+
+			BDD opt = next_of_trans_and_just.and(y_mem[next_p_j][look_r]);
+
+			// If possible, trim down the candidates to prioritize movement-less transitions
+			BDD current_region = current.get_state().exist(env.moduleUnprimeVars()).exist(this.nonRegionProps);
+			if (!opt.and(current_region).isZero()) {
+				opt = opt.and(current_region); 
+			}			
+			return new RawState(0,opt,next_p_j);
+		}
+		return null;
+	}
+
+
+
+	private RawState keep_x_rank(RawState current, int y_rank, int env_j, BDD next_state) {
+		BDD trans = current.get_state().and(Env.prime(next_state));
+		BDD trans_and_not_just = trans.and(env.justiceAt(env_j).not());
+		if (!trans_and_not_just.isZero()) {
+			BDD next_of_trans_and_not_just = Env.unprime(trans_and_not_just.exist(sys.moduleUnprimeVars()).exist(env.moduleUnprimeVars()));
+			BDD opt = next_of_trans_and_not_just.and(x_mem[current.get_rank()][env_j][y_rank]);
+			if (!opt.isZero()) {
+				return new RawState(0,opt,current.get_rank());
+			}
+		}
+		return null;
+	}
+
+	private RawState no_progress(RawState current, int y_rank, int env_j, BDD next_state) {
+		return new RawState(0,next_state.and(y_mem[current.get_rank()][y_rank]), current.get_rank());
+	}
+
+
+	private RawState improve_y_rank(RawState current, int y_rank, int env_j, BDD next_state) {
+		if (y_rank > 0) {
+			int look_r = 0;
+			// look for the further most r.
+			while ((next_state.and(y_mem[current.get_rank()][look_r]).isZero())
+					& (look_r < y_rank)) {
+				look_r++;
+			}
+
+			BDD opt = next_state.and(y_mem[current.get_rank()][look_r]);
+			if ((look_r != y_rank) && (!opt.isZero())) {
+				return new RawState(0,opt,current.get_rank());  
+			}
+		}
+		return null;
+	}
+	
 
 	@SuppressWarnings("unused")
 	//Class for a state of the STRATEGY automaton. 
@@ -665,13 +709,22 @@ public class GROneGame {
 		private int id;
 		private int rank;
 		private BDD state;
-		private Vector<RawState> succ;
+		private Set<RawState> succ;
 
 		public RawState(int id, BDD state, int rank) {
 			this.id = id;
 			this.state = state;
 			this.rank = rank;
-			succ = new Vector<RawState>(10);
+			succ = new HashSet<RawState>();
+		}
+
+		public void satOne() {
+			this.state = this.state.satOne(env.moduleUnprimeVars().union(
+					sys.moduleUnprimeVars()),false);
+		}
+
+		public void set_id(int id) {
+			this.id = id;
 		}
 
 		public void add_succ(RawState to_add) {
@@ -694,7 +747,7 @@ public class GROneGame {
 			this.rank = rank;
 		}
 
-		public Vector<RawState> get_succ() {
+		public Set<RawState> get_succ() {
 			//RawState[] res = new RawState[this.succ.size()];
 			//this.succ.toArray(res);
 			return this.succ;
@@ -740,6 +793,7 @@ public class GROneGame {
 	//Class for a state of the COUNTERSTRATEGY automaton.  
 	//"rank_i" is the environment goal currently being pursued, 
 	//and "rank_j" is the system goal currently being prevented.
+	@SuppressWarnings("unused")
 	private class RawCState {
 		private int id;
 		private int rank_i;
