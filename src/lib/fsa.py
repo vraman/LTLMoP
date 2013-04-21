@@ -276,12 +276,15 @@ class Automaton:
     def getAnnotatedRegionName(self, region_num):
         # annotate any pXXX region names with their human-friendly name
         # convert to set to avoid infinite explosion
-        text = self.regions[region_num].name
-        for p_reg in set(re.findall(r'\b(p\d+)\b',text)):
-            for rname, subregs in self.regionMapping.iteritems():
-                if p_reg in subregs:
-                    break
-            text = re.sub(r'\b'+p_reg+r'\b', '%s (%s)' % (p_reg, rname), text)
+        if region_num:
+            text = self.regions[region_num].name
+            for p_reg in set(re.findall(r'\b(p\d+)\b',text)):
+                for rname, subregs in self.regionMapping.iteritems():
+                    if p_reg in subregs:
+                        break
+                text = re.sub(r'\b'+p_reg+r'\b', '%s (%s)' % (p_reg, rname), text)
+        else:
+            text = ""
 
         return text
 
