@@ -115,7 +115,7 @@ public class GROneMain {
 		// ** Analysis calls
 
 		String debugFile = args[1].replaceAll("\\.[^\\.]+$",".debug");
-		GROneDebug.analyze(env,sys);
+		//GROneDebug.analyze(env,sys);
 
 		///////////////////////////////////////////////
 		//Check that every initial system state is winning for every initial environment state
@@ -152,7 +152,7 @@ public class GROneMain {
 			System.out.println("-----------------------------------------");
 			PrintStream orig_out = System.out;
 			System.setOut(new PrintStream(new File(out_filename))); // writing the output to a file
-			g.printLosingStrategy(counter_exmple);
+			//g.printLosingStrategy(counter_exmple);
 			System.setOut(orig_out); // restore STDOUT
 			System.out.print("-----------------------------------------\n");
 			long t2 = (System.currentTimeMillis() - time);
