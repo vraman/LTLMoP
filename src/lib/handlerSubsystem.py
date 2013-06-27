@@ -16,6 +16,7 @@ from numpy import *
 from copy import deepcopy
 import project
 import json
+import traceback
 
 
 class ParameterObject:
@@ -508,7 +509,7 @@ class HandlerParser:
     A parser loads all handler information
     """
     def __init__(self,path):
-        self.silent = True
+        self.silent = False
         self.handler_path = path    # handler folder path
         self.handler_dic = {}       # dictionary for all handler information {type of handler:list of handlers of that type}
                                     # for sensor,actuator,init and locomotion handler the value is a dictionary {name of the robot: handler object}
@@ -591,8 +592,10 @@ class HandlerParser:
 
         try:
             __import__(handlerFile)
-        except ImportError:
-            if not self.silent: print "WARNING: Failed to import handler %s" % handlerFile
+        except Exception as e:
+            if not self.silent: 
+                print "WARNING: Failed to import handler %s" % handlerFile
+                traceback.print_exc()
             return None
 
         handlerModule = sys.modules[handlerFile]

@@ -110,7 +110,11 @@ class SpecCompiler(object):
                     
         # save the regions into new region file
         filename = self.proj.getFilenamePrefix() + '_decomposed.regions'
-        self.parser.proj.rfi.recalcAdjacency()
+
+        # FIXME: properly support obstacles in non-decomposed maps?
+        if self.proj.compile_options["decompose"]:
+            self.parser.proj.rfi.recalcAdjacency()
+
         self.parser.proj.rfi.writeFile(filename)
 
 
@@ -248,7 +252,7 @@ class SpecCompiler(object):
 
             regionList = ["s."+x.name for x in self.parser.proj.rfi.regions]
 
-            spec, traceback, failed, self.LTL2SpecLineNumber = parseEnglishToLTL.writeSpec(text, sensorList, regionList, robotPropList)
+            spec, traceback, failed, self.LTL2SpecLineNumber, self.proj.internal_props = parseEnglishToLTL.writeSpec(text, sensorList, regionList, robotPropList)
 
             # Abort compilation if there were any errors
             if failed:
@@ -844,6 +848,5 @@ class SpecCompiler(object):
             return 
 
         #self._checkForEmptyGaits()
-        print "--> Synthesizing..."
         return self._synthesize(with_safety_aut)
 

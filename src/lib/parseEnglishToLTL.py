@@ -105,11 +105,15 @@ def writeSpec(text, sensorList, regionList, robotPropList):
     LivenessRE = re.compile('^\s*(go to|visit|infinitely often do|infinitely often sense|infinitely often)',re.IGNORECASE)
     SafetyRE = re.compile('^\s*(always|always do |do|always sense|sense)',re.IGNORECASE)
     StayRE = re.compile('(stay there|stay)',re.IGNORECASE)
+    AtLeastOnceRE = re.compile('(at least once)',re.IGNORECASE)
+    AfterEachTimeRE = re.compile('after each time (?P<cond>.+),(?P<req>.+)(?:at least once)?',re.IGNORECASE)
     EventRE = re.compile('(?P<prop>[\w\.]+) is set on (?P<setEvent>.+) and reset on (?P<resetEvent>.+)',re.IGNORECASE)
     ToggleRE = re.compile('(?P<prop>[\w\.]+) is toggled (when|on) (?P<toggleEvent>.+)',re.IGNORECASE)
     RegionGroupingRE = re.compile('group (?P<groupName>[\w]+) (is|are) (?P<regions>.+)',re.IGNORECASE)
     QuantifierRE = re.compile('\\b(?P<quantifier>all|any)\s+(?P<groupName>\w+)',re.IGNORECASE)
 
+
+    internal_props = []
 
     # Creating the 'Stay' formula - it is a constant formula given the number of bits.
     StayFormula = createStayFormula(regionList)
@@ -138,7 +142,8 @@ def writeSpec(text, sensorList, regionList, robotPropList):
         line = line.replace('\B.\B',' ') # Leave periods that are in the middle of words.
 
         # remove commas except for in region group definitions which need them for the list
-        if not RegionGroupingRE.search(line):
+        # and AET statements which use it as a delimiter
+        if not (RegionGroupingRE.search(line) or AfterEachTimeRE.search(line)):
             line = line.replace(',',' ')
 
         # Check for the presence of a region quantifier
@@ -348,6 +353,64 @@ def writeSpec(text, sensorList, regionList, robotPropList):
                     linemap[CondFormulaInfo['type']].append(lineInd)
                     LTL2LineNo[replaceRegionName(CondFormulaInfo['formula'],bitEncode,regionList)] = lineInd
 
+                # check for "at least once" condition
+                elif AtLeastOnceRE.search(Requirement):
+                    # remove the 'at least once'      
+                    Requirement = Requirement.replace(' at least once','')
+
+                    # parse the liveness requirement
+                    ReqFormulaInfo = parseLiveness(Requirement,sensorList,allRobotProp,lineInd)
+                    if ReqFormulaInfo['formula'] == '': failed = True
+
+                    # If not SysGoals, then it is an error
+                    if not ReqFormulaInfo['type']=='SysGoals':
+                        print 'ERROR(15): Could not parse the sentence in line '+ str(lineInd)+' :'
+                        print line
+                        print 'because the requirement is not system liveness'
+                        failed = True
+                        continue
+
+                    if CondType == "IFF":
+                        print 'ERROR(15): Could not parse the sentence in line '+ str(lineInd)+' :'
+                        print line
+                        print 'because IFF cannot be used with "at least once"'
+                        failed = True
+                        continue
+
+                    ### example ###
+                    # "if s then visit r1 and a at least once"
+                    # ... becomes ...
+                    # []<>(s->m_r1_a)
+                    # [](next(m_r1_a) <-> (m_r1_a | (next(r1) & next(a))))
+                    
+                    regCond = ReqFormulaInfo['formula'].replace('\t\t\t []<>','')
+                    regCond = regCond.replace('& \n','')
+
+                    if QuantifierFlag == "ANY":
+                        print "not implemented yet"
+                        failed = True
+                    elif QuantifierFlag == "ALL":
+                        iterate_over = RegionGroups[quant_group]
+                    else:
+                        iterate_over = ["total hack"]
+
+                    memPropNames = []
+                    for r in iterate_over:
+                        tmp_req = regCond.replace("next(QUANTIFIER_PLACEHOLDER)", nextify(r))
+                        tmp_req = tmp_req.replace("QUANTIFIER_PLACEHOLDER", r)
+                        
+                        internal_props.append("m" + re.sub("(e|s)\.", "", re.sub("\s+","_",tmp_req.replace("&","").replace("(","").replace(")",""))).rstrip("_"))
+                        memPropNames.append("s."+internal_props[-1])
+
+                        condStayFormula = {}
+                        condStayFormula['formula'] = '\t\t\t [](next({0}) <-> ({0} | ({1}))) & \n'.format(memPropNames[-1], nextify(tmp_req))
+                        condStayFormula['type'] = 'SysTrans'
+
+                        spec[condStayFormula['type']] = spec[condStayFormula['type']] + condStayFormula['formula']
+                        linemap[condStayFormula['type']].append(lineInd)
+                        LTL2LineNo[replaceRegionName(CondFormulaInfo['formula'],bitEncode,regionList)] = lineInd
+
+                    ReqFormulaInfo['formula'] = '\t\t\t []<>(' + ' & '.join(memPropNames) + ') & \n'
                 else:
                     # parse requirement normally
                     ReqFormulaInfo = parseLiveness(Requirement,sensorList,allRobotProp,lineInd)
@@ -413,6 +476,44 @@ def writeSpec(text, sensorList, regionList, robotPropList):
                 linemap[CondFormulaInfo['type']].append(lineInd)
                 LTL2LineNo[replaceRegionName(CondFormulaInfo['formula'],bitEncode,regionList)] = lineInd
                 
+        # An "after each time" implicit memory statement
+        elif AfterEachTimeRE.search(line):
+            AfterEachTimeParts = AfterEachTimeRE.search(line) 
+
+            # Extract the 2 pieces (condition and requirement)  
+            Condition = AfterEachTimeParts.group('cond')
+            Requirement = AfterEachTimeParts.group('req')
+    
+            if QuantifierFlag == "ANY" or QuantifierFlag == "ALL":
+                print 'ERROR(6): Quantifiers not yet supported inside "After each time" statements, line '+ str(lineInd)+'\n'
+                failed = True
+                continue
+
+            # Figure out what the requirement is and parse it
+            # FIXME: This doesn't really fit nicely into the category of either liveness or safety;
+            # it's semantically closest to a bare LTL <>
+            if not LivenessRE.search(Requirement):
+                print 'ERROR(13): Could not parse the sentence in line '+ str(lineInd)
+                print 'because only livenesses are currently supported for "After each time"'
+                failed = True
+                continue
+
+            # remove first words
+            Requirement = LivenessRE.sub(' ',Requirement)
+
+            AETFormula_Safety, AETFormula_Goal, mem_prop = parseAfterEachTime(Condition, Requirement, sensorList, allRobotProp, lineInd, StayFormula)
+            if AETFormula_Safety == '': failed = True
+
+            spec["SysTrans"] += AETFormula_Safety
+            linemap["SysTrans"].append(lineInd)
+            LTL2LineNo[replaceRegionName(AETFormula_Safety,bitEncode,regionList)] = lineInd
+
+            spec["SysGoals"] += AETFormula_Goal
+            linemap["SysGoals"].append(lineInd)
+            LTL2LineNo[replaceRegionName(AETFormula_Goal,bitEncode,regionList)] = lineInd
+
+            internal_props.append(mem_prop)
+
         # An event definition
         elif EventRE.search(line):
             # get the groups
@@ -648,7 +749,7 @@ def writeSpec(text, sensorList, regionList, robotPropList):
         print 'They should be removed from the proposition lists\n'
     
 
-    return spec,linemap,failed,LTL2LineNo
+    return spec,linemap,failed,LTL2LineNo,internal_props
 
 
 def parseInit(sentence,PropList,lineInd):
@@ -785,11 +886,12 @@ def parseLiveness(sentence,sensorList,allRobotProp,lineInd):
 
         if (prop in sensorList and formulaInfo['type'] == 'SysGoals') or \
            (prop in allRobotProp and formulaInfo['type'] == 'EnvGoals'):
-            print 'ERROR(5): Could not parse the sentence in line '+ str(lineInd)+' containing:'
-            print sentence
-            print 'because both environment and robot propositions are used \n'
-            formulaInfo['type'] = 'EnvGoals' # arbitrary
-            return formulaInfo
+            #print 'ERROR(5): Could not parse the sentence in line '+ str(lineInd)+' containing:'
+            #print sentence
+            #print 'because both environment and robot propositions are used \n'
+            #formulaInfo['type'] = 'EnvGoals' # arbitrary
+            #return formulaInfo
+            pass
 
         if prop in sensorList and formulaInfo['type'] == '':
             formulaInfo['type'] = 'EnvGoals'
@@ -1020,6 +1122,40 @@ def parseCond(condition,sensorList,allRobotProp,ReqType,lineInd):
     LTLsubformula = '(' + tempFormula + ')'
 
     return LTLsubformula
+
+def parseAfterEachTime(Cond, Requirement, sensorProp, allRobotProp, lineInd, StayFormula):
+    # Getting the subformula encoding the condition
+    Cond = parseCond(Cond,sensorProp,allRobotProp,"SysGoals",lineInd)
+    if Cond == '':
+        # If could not parse the condition, return
+        print 'ERROR(6): Could not parse the condition in line '+ str(lineInd)+'\n'
+        return '', '', ''
+
+    # parse the liveness requirement
+    ReqFormulaInfo = parseLiveness(Requirement,sensorProp,allRobotProp,lineInd)
+    if ReqFormulaInfo['formula'] == '': failed = True
+
+    # If not SysGoals, then it is an error
+    if not ReqFormulaInfo['type']=='SysGoals':
+        print 'ERROR(6): Only system "After each time" statements are currently supported: line '+ str(lineInd)+'\n'
+        return '', '', ''
+
+    Req = ReqFormulaInfo['formula'].replace('\t\t\t []<>','')
+    Req = Req.rstrip().rstrip("&")
+
+
+    mem_prop = "m_" + re.sub("(e|s)\.", "", re.sub("\s+","_",(Cond+" without "+Req).replace("&","").replace("(","").replace(")",""))).rstrip("_")
+
+    # Everything seems to be OK, lets write the formulas
+    MemoryFormula = '\t\t\t ([]( next(s.' + mem_prop + ') <-> ( (' + nextify(Cond) + ' | s.' + mem_prop + ' ) & !(' + nextify(Req) + '))) ) & \n'    
+    GoalFormula = '\t\t\t ([]<>((s.' + mem_prop + ') -> (' + Req + ')) ) & \n'    
+    
+    # For instantaneous reactivity
+    ReactivityFormula = '\t\t\t ([]( (!s.' + mem_prop + ' & next(s.' + mem_prop + ')) -> (' + StayFormula + ' ) ) ) & \n'    
+    
+    return MemoryFormula + ReactivityFormula, GoalFormula, mem_prop
+    
+
 
 def parseToggle(EventProp,ToggleEvent,sensorProp,RobotProp,lineInd):
     ''' This function creates the LTL formulas encoding when a proposition's value should toggle (T->F, F->T).

@@ -8,6 +8,7 @@ import wx.lib.buttons, wx.lib.delayedresult
 import sys, os, re, copy
 import numpy
 import threading
+import textwrap
 
 # Climb the tree to find out where we are
 p = os.path.abspath(__file__)
@@ -166,7 +167,7 @@ class MopsyFrame(wx.Frame):
         self.env_aut.motion_handler = self.dummyMotionHandler
         # We are being a little tricky here by just reversing the sensor and actuator propositions
         # to create a sort of dual of the usual automaton
-        self.env_aut.loadFile(self.proj.getFilenamePrefix() + ".aut", self.proj.enabled_actuators + self.proj.all_customs + region_props, self.proj.enabled_sensors, [])
+        self.env_aut.loadFile(self.proj.getFilenamePrefix() + ".aut", self.proj.enabled_actuators + self.proj.all_customs + self.compiler.proj.internal_props + region_props, self.proj.enabled_sensors, [])
 
         self.env_aut.current_region = None
 
@@ -219,7 +220,7 @@ class MopsyFrame(wx.Frame):
         self.cust_buttons = [] # This will later hold our buttons
 
         actprops = dict((k,v) for k,v in self.actuatorStates.iteritems() if k in self.proj.enabled_actuators)
-        custprops = dict((k,v) for k,v in self.actuatorStates.iteritems() if k in self.proj.all_customs)
+        custprops = dict((k,v) for k,v in self.actuatorStates.iteritems() if k in self.proj.all_customs + self.compiler.proj.internal_props)
 
         self.populateToggleButtons(self.sizer_env, self.env_buttons, self.sensorStates)
         self.populateToggleButtons(self.sizer_act, self.act_buttons, actprops)
@@ -233,7 +234,7 @@ class MopsyFrame(wx.Frame):
         self.history_grid.SetDefaultCellFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL, 0, ""))
         self.history_grid.SetLabelFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL, 0, ""))
 
-        colheaders = self.proj.enabled_sensors + ["Region"] + self.proj.enabled_actuators + self.proj.all_customs
+        colheaders = self.proj.enabled_sensors + ["Region"] + self.proj.enabled_actuators + self.proj.all_customs + self.compiler.proj.internal_props
         self.history_grid.CreateGrid(0,len(colheaders))
         for i,n in enumerate(colheaders):
             self.history_grid.SetColLabelValue(i, " " + n + " ")
@@ -266,7 +267,7 @@ class MopsyFrame(wx.Frame):
             print "WARNING: negative jx"
             return
 
-        goal_ltl = self.spec['SysGoals'].split('\n')[jx].strip()
+        goal_ltl = self.spec['SysGoals'].split('\n')[jx].strip("\n\t &")
         
         if self.proj.compile_options["parser"] == "structured":
             spec_line_num = None
@@ -276,7 +277,7 @@ class MopsyFrame(wx.Frame):
                     break
 
             if spec_line_num is None:
-                print "ERROR: Couldn't find goal {!r} in LTL->spec mapping".format(ltl_frag)
+                print "ERROR: Couldn't find goal {!r} in LTL->spec mapping".format(goal_ltl)
                 return
 
             goal_spec = self.compiler.proj.specText.split("\n")[spec_line_num-1]
@@ -353,7 +354,8 @@ class MopsyFrame(wx.Frame):
         newvals = [self.sensorStates[s] for s in self.proj.enabled_sensors] + \
                   [self.env_aut.getAnnotatedRegionName(self.current_region)] + \
                   [self.actuatorStates[s] for s in self.proj.enabled_actuators] + \
-                  [self.actuatorStates[s] for s in self.proj.all_customs]
+                  [self.actuatorStates[s] for s in self.proj.all_customs] + \
+                  [self.actuatorStates[s] for s in self.compiler.proj.internal_props]
         lastrow = self.history_grid.GetNumberRows()-1
 
         for i,v in enumerate(newvals):
@@ -419,7 +421,7 @@ class MopsyFrame(wx.Frame):
         ltl_topo = self.spec['Topo'].replace('\n','').replace('\t','').strip()
         ltl_trans = [s.strip() for s in self.spec['SysTrans'].split('\n')]
         # note: strip()s make canonical (i.e. terminate in &, no whitespace on either side)
-        guilty_ltl = self.compiler.unsatCores(ltl_topo, ltl_current, [ltl_next] + ltl_trans, 1, 1)
+        guilty_ltl = self.compiler.unsatCores(self.compiler._getPicosatCommand(), ltl_topo, ltl_current, [ltl_next] + ltl_trans, 1, 1)
         print "Guilty LTL: ", guilty_ltl
 
         guilty_spec = []
@@ -474,7 +476,8 @@ class MopsyFrame(wx.Frame):
     def populateToggleButtons(self, target_sizer, button_container, items):
         for item_name, item_val in items.iteritems():
             # Create the new button and add it to the sizer
-            button_container.append(wx.lib.buttons.GenToggleButton(self.window_1_pane_2, -1, item_name))
+            name = textwrap.fill(item_name, 100)
+            button_container.append(wx.lib.buttons.GenToggleButton(self.window_1_pane_2, -1, name))
             target_sizer.Add(button_container[-1], 1, wx.EXPAND, 0)
 
             # Set the initial value as appropriate
@@ -501,7 +504,7 @@ class MopsyFrame(wx.Frame):
 
         #print btn.GetLabelText() + "=" + str(btn.GetValue())
 
-        self.actuatorStates[btn.GetLabelText()] = int(btn.GetValue())
+        self.actuatorStates[btn.GetLabelText().replace("\n","")] = int(btn.GetValue())
 
         # TODO: Button background colour doesn't show up very well
         if btn.GetValue():
