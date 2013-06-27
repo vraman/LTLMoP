@@ -41,7 +41,7 @@ class AnalysisResultsDialog(wx.Dialog):
         self.label_3 = wx.StaticText(self, wx.ID_ANY, "Analysis Output:")
         self.text_ctrl_summary = wx.richtext.RichTextCtrl(self, wx.ID_ANY, "", style=wx.TE_MULTILINE | wx.TE_READONLY)
         self.button_refine = wx.Button(self, wx.ID_ANY, "Refine analysis")
-        self.label_10 = wx.StaticText(self, wx.ID_ANY, "SLURP Traceback:")
+        self.label_traceback = wx.StaticText(self, wx.ID_ANY, "SLURP Traceback:")
         self.tree_ctrl_traceback = wx.TreeCtrl(self, wx.ID_ANY, style=wx.TR_HAS_BUTTONS | wx.TR_NO_LINES | wx.TR_FULL_ROW_HIGHLIGHT | wx.TR_HIDE_ROOT | wx.TR_DEFAULT_STYLE | wx.SUNKEN_BORDER)
         self.button_1 = wx.Button(self, wx.ID_CLOSE, "")
 
@@ -61,6 +61,8 @@ class AnalysisResultsDialog(wx.Dialog):
         # begin wxGlade: AnalysisResultsDialog.__set_properties
         self.SetTitle("Analysis Results")
         self.SetSize((562, 602))
+        self.label_traceback.Hide()
+        self.tree_ctrl_traceback.Hide()
         # end wxGlade
 
     def __do_layout(self):
@@ -70,7 +72,7 @@ class AnalysisResultsDialog(wx.Dialog):
         sizer_11.Add(self.label_3, 0, wx.ALL, 5)
         sizer_11.Add(self.text_ctrl_summary, 1, wx.ALL | wx.EXPAND, 5)
         sizer_11.Add(self.button_refine, 0, wx.ALL | wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL, 5)
-        sizer_11.Add(self.label_10, 0, wx.ALL, 5)
+        sizer_11.Add(self.label_traceback, 0, wx.ALL, 5)
         sizer_11.Add(self.tree_ctrl_traceback, 3, wx.ALL | wx.EXPAND, 5)
         sizer_16.Add((20, 20), 1, wx.EXPAND, 0)
         sizer_16.Add(self.button_1, 0, wx.ALL | wx.EXPAND, 5)
@@ -121,7 +123,7 @@ class AnalysisResultsDialog(wx.Dialog):
 
 
     def markFragments(self, agent, section, jx=None):
-        jx_this = 0 # debug output is 1-indexed
+        jx_this = -1 # debug output is 0-indexed
 
         for f,obj in self.statements[agent]:
             if "[]<>" in f: 
@@ -198,7 +200,10 @@ class AsynchronousProcessThread(threading.Thread):
 
         # Start the process
         try:
-            self.process = subprocess.Popen(self.cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, close_fds=False)
+            if self.logFunction is not None:
+                self.process = subprocess.Popen(self.cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, close_fds=False, bufsize=-1)
+            else:
+                self.process = subprocess.Popen(self.cmd, bufsize=-1)
         except err_types as (errno, strerror):
             print "ERROR: " + strerror
             self.startComplete.set()
@@ -213,13 +218,10 @@ class AsynchronousProcessThread(threading.Thread):
             if not self.running:
                 return
 
-            output = self.process.stdout.readline() # Blocking :(
-
             # Output to either a RichTextCtrl or the console
             if self.logFunction is not None:
+                output = self.process.stdout.readline() # Blocking :(
                 wx.CallAfter(self.logFunction, "\t"+output, "BLACK")
-            else:
-                print output,
 
             # Check the status of the process
             self.process.poll()
@@ -305,6 +307,7 @@ class SpecEditorFrame(wx.Frame):
         global MENU_COMPILECONFIG; MENU_COMPILECONFIG = wx.NewId()
         global MENU_CONVEXIFY; MENU_CONVEXIFY = wx.NewId()
         global MENU_FASTSLOW; MENU_FASTSLOW = wx.NewId()
+        global MENU_BITVECTOR; MENU_BITVECTOR = wx.NewId()
         global MENU_PARSERMODE; MENU_PARSERMODE = wx.NewId()
         global MENU_PARSERMODE_SLURP; MENU_PARSERMODE_SLURP = wx.NewId()
         global MENU_PARSERMODE_STRUCTURED; MENU_PARSERMODE_STRUCTURED = wx.NewId()
@@ -336,6 +339,7 @@ class SpecEditorFrame(wx.Frame):
         wxglade_tmp_menu_sub = wx.Menu()
         wxglade_tmp_menu_sub.Append(MENU_CONVEXIFY, "Decompose workspace into convex regions", "", wx.ITEM_CHECK)
         wxglade_tmp_menu_sub.Append(MENU_FASTSLOW, "Enable \"fast-slow\" synthesis", "", wx.ITEM_CHECK)
+        wxglade_tmp_menu_sub.Append(MENU_BITVECTOR, "Use bit-vector region encoding", "", wx.ITEM_CHECK)
         wxglade_tmp_menu_sub_sub = wx.Menu()
         wxglade_tmp_menu_sub_sub.Append(MENU_PARSERMODE_SLURP, "SLURP (NL)", "", wx.ITEM_RADIO)
         wxglade_tmp_menu_sub_sub.Append(MENU_PARSERMODE_STRUCTURED, "Structured English", "", wx.ITEM_RADIO)
@@ -385,6 +389,7 @@ class SpecEditorFrame(wx.Frame):
         self.label_locphrases = wx.StaticText(self.notebook_1_pane_3, wx.ID_ANY, "Active locative phrases:")
         self.list_box_locphrases = wx.ListBox(self.notebook_1_pane_3, wx.ID_ANY, choices=[], style=wx.LB_ALWAYS_SB)
         self.checkbox_regionlabel = wx.CheckBox(self.notebook_1_pane_3, wx.ID_ANY, "Show region names")
+        self.checkbox_regionlabelbits = wx.CheckBox(self.notebook_1_pane_3, wx.ID_ANY, "Include bit-vector representations")
         self.panel_locmap = wx.Panel(self.notebook_1_pane_3, wx.ID_ANY, style=wx.SUNKEN_BORDER | wx.TAB_TRAVERSAL | wx.FULL_REPAINT_ON_RESIZE)
 
         self.__set_properties()
@@ -405,6 +410,7 @@ class SpecEditorFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.onMenuCompile, id=MENU_COMPILE)
         self.Bind(wx.EVT_MENU, self.onMenuSetCompileOptions, id=MENU_CONVEXIFY)
         self.Bind(wx.EVT_MENU, self.onMenuSetCompileOptions, id=MENU_FASTSLOW)
+        self.Bind(wx.EVT_MENU, self.onMenuSetCompileOptions, id=MENU_BITVECTOR)
         self.Bind(wx.EVT_MENU, self.onMenuSetCompileOptions, id=MENU_PARSERMODE_SLURP)
         self.Bind(wx.EVT_MENU, self.onMenuSetCompileOptions, id=MENU_PARSERMODE_STRUCTURED)
         self.Bind(wx.EVT_MENU, self.onMenuSetCompileOptions, id=MENU_PARSERMODE_LTL)
@@ -427,7 +433,8 @@ class SpecEditorFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.onPropAdd, self.button_custom_add)
         self.Bind(wx.EVT_BUTTON, self.onPropRemove, self.button_custom_remove)
         self.Bind(wx.EVT_LISTBOX, self.onLocPhraseSelect, self.list_box_locphrases)
-        self.Bind(wx.EVT_CHECKBOX, self.onRegionLabelToggle, self.checkbox_regionlabel)
+        self.Bind(wx.EVT_CHECKBOX, self.onRegionLabelStyleChange, self.checkbox_regionlabel)
+        self.Bind(wx.EVT_CHECKBOX, self.onRegionLabelStyleChange, self.checkbox_regionlabelbits)
         # end wxGlade
 
         # Listen for checkbox toggles
@@ -531,6 +538,7 @@ class SpecEditorFrame(wx.Frame):
         self.text_ctrl_spec.MarkerDeleteAll(MARKER_LIVE)
         self.text_ctrl_log.Clear()
         self.frame_1_menubar.Check(MENU_CONVEXIFY, self.proj.compile_options["convexify"])
+        self.frame_1_menubar.Check(MENU_BITVECTOR, self.proj.compile_options["use_region_bit_encoding"])
         self.frame_1_menubar.Check(MENU_FASTSLOW, self.proj.compile_options["fastslow"])
         if self.proj.compile_options["parser"] == "slurp":
             self.frame_1_menubar.Check(MENU_PARSERMODE_SLURP, True)
@@ -580,7 +588,7 @@ class SpecEditorFrame(wx.Frame):
     def __set_properties(self):
         # begin wxGlade: SpecEditorFrame.__set_properties
         self.SetTitle("Specification Editor - Untitled")
-        self.SetSize((900, 700))
+        self.SetSize((929, 700))
         self.button_map.Enable(False)
         self.list_box_sensors.SetMinSize((123, 75))
         self.button_sensor_remove.Enable(False)
@@ -643,6 +651,7 @@ class SpecEditorFrame(wx.Frame):
         sizer_15.Add(self.list_box_locphrases, 1, wx.EXPAND, 0)
         sizer_15.Add((20, 20), 0, 0, 0)
         sizer_15.Add(self.checkbox_regionlabel, 0, wx.EXPAND, 0)
+        sizer_15.Add(self.checkbox_regionlabelbits, 0, wx.LEFT | wx.EXPAND, 20)
         sizer_15.Add((20, 20), 0, 0, 0)
         sizer_14.Add(sizer_15, 1, wx.EXPAND, 0)
         sizer_14.Add((5, 20), 0, 0, 0)
@@ -653,7 +662,7 @@ class SpecEditorFrame(wx.Frame):
         self.notebook_1.AddPage(self.notebook_1_pane_3, "Workspace Decomposition")
         sizer_2.Add(self.notebook_1, 1, wx.EXPAND, 0)
         self.window_1_pane_2.SetSizer(sizer_2)
-        self.window_1.SplitHorizontally(self.window_1_pane_1, self.window_1_pane_2, 453)
+        self.window_1.SplitHorizontally(self.window_1_pane_1, self.window_1_pane_2, 425)
         sizer_1.Add(self.window_1, 1, wx.EXPAND, 0)
         self.SetSizer(sizer_1)
         self.Layout()
@@ -663,6 +672,8 @@ class SpecEditorFrame(wx.Frame):
         # Make it so that the log window doesn't change height when the window is resized
         # NOTE: May not work on older versions of wxWidgets
         self.window_1.SetSashGravity(1.0)
+
+        self.window_1.SetMinimumPaneSize(100)
 
     def drawLocMap(self, event):
         """ Respond to a request to redraw the contents of the decomposed map
@@ -677,7 +688,7 @@ class SpecEditorFrame(wx.Frame):
         # TODO: Advise the user that the decomposed map may be inaccurate if
         #  mtime(spec)>mtime(aut) or spectext is dirty
 
-        mapRenderer.drawMap(self.panel_locmap, self.decomposedRFI, scaleToFit=True, drawLabels=self.checkbox_regionlabel.GetValue(), highlightList=highlightList)
+        mapRenderer.drawMap(self.panel_locmap, self.decomposedRFI, scaleToFit=True, drawLabels=self.checkbox_regionlabel.GetValue(), highlightList=highlightList, showBits=self.checkbox_regionlabelbits.GetValue())
 
     def onPropositionDblClick(self, event): # wxGlade: SpecEditorFrame.<event_handler>
         """
@@ -861,6 +872,10 @@ class SpecEditorFrame(wx.Frame):
     def openFile(self, filename):
         proj = project.Project()
 
+        # If necessary, try appending ".spec"
+        if not os.path.exists(filename):
+            filename = os.path.splitext(filename)[0] + ".spec"
+
         if not proj.loadProject(filename):
             wx.MessageBox("Cannot open specification file %s" % (filename), "Error",
                         style = wx.OK | wx.ICON_ERROR)
@@ -920,6 +935,7 @@ class SpecEditorFrame(wx.Frame):
         self.text_ctrl_spec.EmptyUndoBuffer()
 
         # Set compilation option checkboxes
+        self.frame_1_menubar.Check(MENU_BITVECTOR, self.proj.compile_options["use_region_bit_encoding"])
         self.frame_1_menubar.Check(MENU_CONVEXIFY, self.proj.compile_options["convexify"])
         self.frame_1_menubar.Check(MENU_FASTSLOW, self.proj.compile_options["fastslow"])
 
@@ -1141,6 +1157,11 @@ class SpecEditorFrame(wx.Frame):
     def onMenuSimulate(self, event): # wxGlade: SpecEditorFrame.<event_handler>
         """ Run the simulation with current experiment configuration. """
 
+        if not self.proj.compile_options["use_region_bit_encoding"]:
+            wx.MessageBox("Execution requires bit-vector region encoding.\nPlease enable it and recompile.", "Error",
+                        style = wx.OK | wx.ICON_ERROR)
+            return
+
         # TODO: or check mtime
         if self.dirty:
             response = wx.MessageBox("Specification may have changed since last compile.\nContinue anyways, without recompiling?",
@@ -1334,10 +1355,6 @@ class SpecEditorFrame(wx.Frame):
                       style = wx.OK | wx.ICON_INFORMATION)
         #event.Skip()
 
-    def onRegionLabelToggle(self, event): # wxGlade: SpecEditorFrame.<event_handler>
-        self.panel_locmap.Refresh()
-        event.Skip()
-
     def onLocPhraseSelect(self, event): # wxGlade: SpecEditorFrame.<event_handler>
         self.panel_locmap.Refresh()
         event.Skip()
@@ -1356,10 +1373,16 @@ class SpecEditorFrame(wx.Frame):
         # Populate tree based on traceback data
 
         if self.proj.compile_options["parser"] == "slurp":
+            self.analysisDialog.label_traceback.Show()
+            self.analysisDialog.tree_ctrl_traceback.Show()
             if self.tracebackTree is not None:
                 self.analysisDialog.populateTree(self.tracebackTree) 
 
             self.analysisDialog.tree_ctrl_traceback.ExpandAll()
+        else:
+            self.analysisDialog.label_traceback.Hide()
+            self.analysisDialog.tree_ctrl_traceback.Hide()
+        
         self.appendLog("Running analysis...\n","BLUE")
 
         # Redirect all output to the log
@@ -1405,7 +1428,7 @@ class SpecEditorFrame(wx.Frame):
 
         self.appendLog("Initial analysis complete.\n\n", "BLUE")
 
-        if (not realizable or not nonTrivial):# and self.unsat:
+        if (not realizable or not nonTrivial) and self.unsat:
             self.appendLog("Further analysis is possible.\n", "BLUE")
             self.analysisDialog.button_refine.Enable(True)
             self.analysisDialog.button_refine.SetLabel("Refine analysis...")
@@ -1477,6 +1500,11 @@ class SpecEditorFrame(wx.Frame):
 
     def onMenuMopsy(self, event): # wxGlade: SpecEditorFrame.<event_handler>
         # Opens the counterstrategy visualization interfacs ("Mopsy")
+
+        if not self.proj.compile_options["use_region_bit_encoding"]:
+            wx.MessageBox("Mopsy currently requires bit-vector region encoding.\nPlease enable it and recompile.", "Error",
+                        style = wx.OK | wx.ICON_ERROR)
+            return
 
         # TODO: check for failed compilation before allowing this
         if self.to_highlight is None:
@@ -1614,6 +1642,7 @@ class SpecEditorFrame(wx.Frame):
     def onMenuSetCompileOptions(self, event):  # wxGlade: SpecEditorFrame.<event_handler>
         self.proj.compile_options["convexify"] = self.frame_1_menubar.IsChecked(MENU_CONVEXIFY)
         self.proj.compile_options["fastslow"] = self.frame_1_menubar.IsChecked(MENU_FASTSLOW)
+        self.proj.compile_options["use_region_bit_encoding"] = self.frame_1_menubar.IsChecked(MENU_BITVECTOR)
         if self.frame_1_menubar.IsChecked(MENU_PARSERMODE_SLURP):
             self.proj.compile_options["parser"] = "slurp"
         elif self.frame_1_menubar.IsChecked(MENU_PARSERMODE_STRUCTURED):
@@ -1621,6 +1650,15 @@ class SpecEditorFrame(wx.Frame):
         elif self.frame_1_menubar.IsChecked(MENU_PARSERMODE_LTL):
             self.proj.compile_options["parser"] = "ltl"
         self.dirty = True
+
+    def onRegionLabelStyleChange(self, event):  # wxGlade: SpecEditorFrame.<event_handler>
+        if self.checkbox_regionlabel.GetValue():
+            self.checkbox_regionlabelbits.Enable(True)
+        else:
+            self.checkbox_regionlabelbits.Enable(False)
+
+        self.panel_locmap.Refresh()
+        event.Skip()
 
 # end of class SpecEditorFrame
 
@@ -1643,7 +1681,7 @@ class RedirectText:
 
         m = re.search(r"Could not parse the sentence in line (\d+)", string)
         if m:
-            self.parent.text_ctrl_spec.MarkerAdd(int(m.group(1)),MARKER_PARSEERROR)
+            self.parent.text_ctrl_spec.MarkerAdd(int(m.group(1))-1,MARKER_PARSEERROR)
 
 
 if __name__ == "__main__":

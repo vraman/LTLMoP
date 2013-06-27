@@ -540,6 +540,9 @@ class simSetupDialog(wx.Dialog):
             cfg = ConfigObject()
             # TODO: Check for existing untitleds and add a number at the end (steal from reged)
             cfg.name = "Untitled configuration"
+            cfg.fileName = os.path.join(self.proj.hsub.config_parser.config_path,cfg.name.replace(' ','_'))
+            # since this config is not loaded, we assume it is complete
+            cfg.complete = True
             self.proj.hsub.config_parser.configs.append(cfg)
             self.list_box_experiment_name.Append(cfg.name, cfg)
 
@@ -686,6 +689,9 @@ class simSetupDialog(wx.Dialog):
 
         # TODO: Check for existing untitleds and add a number at the end (steal from reged)
         cfg.name = "Untitled configuration"
+        cfg.fileName = os.path.join(self.proj.hsub.config_parser.config_path,cfg.name.replace(' ','_'))
+        # since this config is not loaded, we assume it is complete
+        cfg.complete = True
         self.proj.hsub.configs.append(cfg)
 
         self.list_box_experiment_name.Append(cfg.name, cfg)
@@ -733,6 +739,8 @@ class simSetupDialog(wx.Dialog):
     def onSimNameEdit(self, event): # wxGlade: simSetupDialog.<event_handler>
         pos = self.list_box_experiment_name.GetSelection()
         self.list_box_experiment_name.GetClientData(pos).name = event.GetString()
+        pathName = os.path.dirname(self.list_box_experiment_name.GetClientData(pos).fileName)
+        self.list_box_experiment_name.GetClientData(pos).fileName = os.path.join(pathName,event.GetString().replace(' ','_'))
         self.list_box_experiment_name.SetString(pos, event.GetString())
         event.Skip()
 
@@ -741,9 +749,6 @@ class simSetupDialog(wx.Dialog):
         if dlg.ShowModal() != wx.ID_CANCEL:
             obj = self._getSelectedConfigObject()
             obj.robots += [dlg.robot]
-
-            # Disallow spaces and non-alphanums in robot name
-            dlg.robot.name = re.sub(r"\W", "_", dlg.robot.name.strip())
 
             if obj.main_robot == '':
                 obj.main_robot = dlg.robot.name
@@ -760,20 +765,23 @@ class simSetupDialog(wx.Dialog):
 
         pos = self.list_box_robots.GetSelection()
         r = self.list_box_robots.GetClientData(pos)
-        dlg._robot2dialog(deepcopy(r))
+        dlg._robot2dialog(deepcopy(r), original=True)
         if dlg.ShowModal() != wx.ID_CANCEL:
             obj = self._getSelectedConfigObject()
-
-            # Disallow spaces and non-alphanums in robot name
-            dlg.robot.name = re.sub(r"\W", "_", dlg.robot.name.strip())
 
             # Update the name of the main robot if necessary
             if obj.main_robot == obj.robots[pos].name:
                 obj.main_robot = dlg.robot.name
+
+            # Update any propmappings with new name, if necessary
+            for k,v in obj.prop_mapping.iteritems():
+                obj.prop_mapping[k] = re.sub("^"+r.name+"\.", dlg.robot.name+".", v)
+
             obj.robots[pos] = dlg.robot
             self._cfg2dialog(obj)
         dlg.Destroy()
         event.Skip()
+
 
     def onClickRemoveRobot(self, event): # wxGlade: simSetupDialog.<event_handler>
         if self.list_box_robots.GetSelection() == -1:
@@ -901,8 +909,10 @@ class addRobotDialog(wx.Dialog):
         self.Bind(wx.EVT_BUTTON, self.onClickOK, self.button_6)
         # end wxGlade
 
+        self.parent = parent
         self.proj = parent.proj
         self.robot = RobotObject()
+        self.original_robot = RobotObject()
 
         self.handler_labels = {}
         self.handler_combos = {}
@@ -944,11 +954,15 @@ class addRobotDialog(wx.Dialog):
             self.handler_combos[htype].Clear()
 
             if htype in self.proj.hsub.handler_parser.handler_robotSpecific_type: 
-                for i, h in enumerate(self.proj.hsub.handler_dic[htype][self.robot.type]):
-                    self.handler_combos[htype].Insert(h.name, i)
+                # HACK: temporary fix for hsub returning empty handlers when loading fails
+                hnames = [h.name for h in self.proj.hsub.handler_dic[htype][self.robot.type] if h.name != '']
+                for i, hn in enumerate(hnames):
+                    self.handler_combos[htype].Insert(hn, i)
             else:
-                for i, h in enumerate(self.proj.hsub.handler_dic[htype]):
-                    self.handler_combos[htype].Insert(h.name, i)
+                # HACK: temporary fix for hsub returning empty handlers when loading fails
+                hnames = [h.name for h in self.proj.hsub.handler_dic[htype] if h.name != '']
+                for i, hn in enumerate(hnames):
+                    self.handler_combos[htype].Insert(hn, i)
 
     def __set_properties(self):
         # begin wxGlade: addRobotDialog.__set_properties
@@ -982,8 +996,15 @@ class addRobotDialog(wx.Dialog):
         # end wxGlade
         self.sizer_9 = sizer_9
 
-    def _robot2dialog(self, robot):
+    def _robot2dialog(self, robot, original=False):
+        """
+        Update the GUI based on a robot object.
+        If `original` is True, save a reference to allow for reversion to defaults.
+        """
+
         self.robot = robot
+        if original:
+            self.original_robot = deepcopy(robot)
         self.combo_box_robottype.SetStringSelection(self.robot.type)
         self.text_ctrl_robotname.SetValue(self.robot.name)
         self._populateHandlerCombos()
@@ -1052,15 +1073,53 @@ class addRobotDialog(wx.Dialog):
 
         event.Skip()
 
+    def _normalizeRobotName(self, name):
+        """ Clean a robot name and make sure it's not taken already"""
+
+        # Disallow empty names, because that would be super confusing
+        if name is None or name == "":
+            raise ValueError("Your robot needs a name!")
+
+        # Disallow any reserved names
+        if name in ["share"]:
+            raise ValueError('"{}" is a reserved keyword.  Please choose another name.'.format(name))
+        
+        # Replace spaces and non-alphanums with underscores
+        name = re.sub(r"\W", "_", name.strip())
+
+        # Make sure another robot doesn't already have this name
+        if name != self.original_robot.name and \
+           name in (r.name for r in self.parent._getSelectedConfigObject().robots):
+            raise ValueError('Current configuration already contains a robot with name "{}".\n\nPlease rename.'.format(name))
+
+        return name
+        
     def onClickOK(self, event): # wxGlade: addRobotDialog.<event_handler>
         # TODO: add in checks for all combo boxes (don't allow null handlers)
 
-        if self.robot.name is None or self.robot.name == "":
-            wx.MessageBox("Your robot needs a name!", "Error",
-                        style = wx.OK | wx.ICON_ERROR)
+        # Make sure that all required handler parameters have been specified
+        incomplete_params = []
+        for h_type, handler in self.robot.handlers.iteritems():
+            for param in handler.getMethodByName("__init__").para:
+                if param.getValue() is None:
+                    incomplete_params.append((handler.name, param.name))
+
+        if len(incomplete_params) > 0:
+            wx.MessageBox("The following parameters need to be specified:\n" + \
+                          "\n".join(["  - {}.{}".format(hn, pn) for hn, pn in incomplete_params]),
+                           "Error", style = wx.OK | wx.ICON_ERROR)
             event.Skip(False)
-        else:
-            event.Skip()
+            return
+            
+        # Make sure the robot name is OK
+        try:
+            self.robot.name = self._normalizeRobotName(self.robot.name) 
+        except ValueError as e:
+            wx.MessageBox(e.message, "Error", style = wx.OK | wx.ICON_ERROR)
+            event.Skip(False)
+            return
+    
+        event.Skip()
 
     def onChooseRobot(self, event): # wxGlade: addRobotDialog.<event_handler>
         self.robot = deepcopy(self.proj.hsub.getRobotByType(event.GetEventObject().GetValue()))

@@ -15,6 +15,30 @@ import numpy
 import fileMethods
 
 
+def stateToLTL(state, use_next=False, include_env=True, swap_io=False):
+    """ swap_io is for the counterstrategy aut in mopsy """
+
+    def decorate_prop(prop, polarity):
+        if int(polarity) == 0:
+            prop = "!"+prop
+        if use_next:
+            prop = "next({})".format(prop)
+        return prop
+        
+    inputs = state.inputs
+    outputs = state.outputs
+
+    if swap_io:
+        inputs, outputs = outputs, inputs
+
+    sys_state = " & ".join([decorate_prop("s."+p, v) for p,v in outputs.iteritems()])
+
+    if include_env:
+        env_state = " & ".join([decorate_prop("e."+p, v) for p,v in inputs.iteritems()])
+        return " & ".join([env_state, sys_state])
+    else:
+        return sys_state
+
 ###########################################################
 
 class FSA_State:
@@ -56,6 +80,7 @@ class Automaton:
         self.proj = proj
 
         self.states = []    # A collection of state objects belonging to the automaton
+        self.stateNameToState = {}
 
         self.regions = proj.rfi.regions # a list of region objects
         self.regionMapping = proj.regionMapping # mapping between original regions and decomposed regions
@@ -84,12 +109,12 @@ class Automaton:
         """
         Find the state with the given name
         """
-        for i in range(len(self.states)):
-            if(self.states[i].name == name):
-                return self.states[i]
 
-        print "ERROR: Can't find state with name %s!" % (name)
-        return None
+        try:
+            return self.stateNameToState[name]
+        except KeyError:
+            print "ERROR: Can't find state with name %s!" % (name)
+            return None
 
     def dumpStates(self, range=None):
         """
@@ -111,8 +136,6 @@ class Automaton:
                 print trans.name
                 
                 
-                
-
     def updateOutputs(self, state=None):
         """
         Update the values of current outputs in our execution environment to reflect the output
@@ -186,6 +209,7 @@ class Automaton:
         """
         # Clear any existing states
         self.states = []
+        self.stateNameToState = {}
         self.initialize()
 
         # These will be used later by updateOutputs() and findTransitionableState()
@@ -249,6 +273,7 @@ class Automaton:
             newstate = FSA_State(number, inputs, outputs, transitions)
             newstate.rank=rank
             self.states.append(newstate)
+            self.stateNameToState[number] = newstate
 
 
         ########################
@@ -267,7 +292,7 @@ class Automaton:
             ends = match.group('ends').split(', ')
 
             # Change the references to state names into references to the corresponding state objects
-            ends = map(lambda name: self.stateWithName(name), ends)
+            ends = [self.stateWithName(n) for n in ends]
 
             # Stick these transitions onto the appropriate state
             self.stateWithName(start).transitions = ends
@@ -464,17 +489,6 @@ class Automaton:
         # Define our pool of states to select from
         if initial:
             state_list = self.states
-
-            # initialize all sensor and actuators
-            for prop,codes in self.sensor_handler['initializing_handler'].iteritems():
-                if prop in self.sensors:
-                    for code in codes:
-                        eval(code, {'self':self,'initial':True})
-            for prop,codes in self.actuator_handler['initializing_handler'].iteritems():
-                if prop in self.actuators:
-                    new_val = self.current_outputs[prop]
-                    for code in codes:
-                        eval(code, {'self':self,'initial':True,'new_val':new_val})
         else:
             state_list = self.current_state.transitions
 
