@@ -1,5 +1,6 @@
 import net.sf.javabdd.BDD;
 import java.io.*;
+import java.util.Arrays;
 import net.sf.javabdd.BDDVarSet;
 import net.sf.javabdd.BDD.BDDIterator;
 import edu.wis.jtlv.env.Env;
@@ -16,6 +17,12 @@ import edu.wis.jtlv.env.spec.SpecBDD;
 import edu.wis.jtlv.lib.AlgRunnerThread;
 import edu.wis.jtlv.lib.AlgResultI;
 import edu.wis.jtlv.lib.mc.tl.LTLModelCheckAlg;
+
+
+import edu.wis.jtlv.env.spec.Operator;
+import edu.wis.jtlv.env.spec.Spec;
+import edu.wis.jtlv.env.spec.SpecBDD;
+import edu.wis.jtlv.env.spec.SpecExp;
 
 // Class containing methods for performing unsatisfiability and unrealizability checks on a specification 
 // Spec consists of environment and system modules (env, sys)
@@ -61,10 +68,202 @@ public class GROneDebug {
 		
 		
 		//Prints the results of analyzing the specification. 
-		System.out.println(analyze(env, sys));		
+		System.out.println(analyze(env, sys));
 	}
 	
-	public static String analyze(SMVModule env, SMVModule sys) {
+	
+	public static String cores(String smv, String ltl, int guiltyGF) throws Exception {
+		//Env.loadModule(smv);
+		Spec[] spcs = Env.loadSpecFile(ltl);
+		
+		// Figure out the name of our output file by stripping the spec filename extension and adding .aut
+		String out_filename = ltl.replaceAll("\\.[^\\.]+$",".aut");
+
+		// constructing the environment module.
+		SMVModule env = (SMVModule) Env.getModule("main.e");
+		Spec[] env_conjuncts = GROneParser.parseConjuncts(spcs[0]);
+		
+		// constructing the system module.
+		SMVModule sys = (SMVModule) Env.getModule("main.s");
+		Spec[] sys_conjuncts = GROneParser.parseConjuncts(spcs[1]);
+		
+		Spec[] final_conjuncts = selectGoal(sys_conjuncts, guiltyGF);
+		
+		
+		int numGlobals = countGlobals(sys_conjuncts);
+		
+		
+		int j = 0;
+		int[] indices = new int[numGlobals];
+		for (int i = numGlobals-1; i >= 0; i--) {
+			env = (SMVModule) Env.getModule("main.e");
+			GROneParser.addReactiveBehavior(env, env_conjuncts);
+			
+			sys = (SMVModule) Env.getModule("main.s");
+			
+			Spec[] newSys = removeGlobalConjuncts(final_conjuncts, i);
+			
+			
+			
+			GROneParser.addReactiveBehavior(sys, newSys);
+			
+			
+			GROneGame g = null;		 
+			try { 
+				       g = new GROneGame(env,sys);		
+			 }	catch (Exception e){//Catch exception if any
+					       System.err.println("Error: " + e.getMessage());
+			 }
+			 
+			BDD sys_init = sys.initial();
+			BDD env_init = env.initial();
+			BDD all_init = sys_init.and(env_init);	 
+			BDD counter_example = g.envWinningStates().and(all_init);
+			if (!counter_example.isZero()) {
+				final_conjuncts = newSys;
+				indices[j] = i;
+				j++;
+			} 
+		}
+		return Arrays.toString(indices);
+	}
+	
+	public static Spec[] removeGlobalConjuncts(Spec[] spcs, int numG) throws Exception {
+		Spec[] newSpecs = new Spec[spcs.length];
+		int i = 0;
+		int j = 0;
+		for (Spec sp : spcs) {
+			String exp_stmt = "Cannot parse specification \"" + sp + "\".\n";
+
+			// ** 1. if it is just a simple BDD
+			if (sp instanceof SpecBDD) {
+				newSpecs[i] = sp;
+				i++;
+			} else {
+				// ** 2. if it is a global specification.
+				if (!(sp instanceof SpecExp))
+					throw new Exception(exp_stmt);
+				SpecExp spe = (SpecExp) sp;
+				Spec child = spe.getChildren()[0];
+				if (spe.getOperator() != Operator.GLOBALLY)
+					throw new Exception(exp_stmt);
+				// otherwise it is GLOBALLY
+				if (child instanceof SpecBDD) {
+					if (j != numG) {
+						newSpecs[i] = sp;
+						i++;
+					}
+					j++;
+				} else {
+					// ** 3. if it is a global finally specification.
+					if (!(child instanceof SpecExp))
+						throw new Exception(exp_stmt);
+					// otherwise it is SpecExp
+					SpecExp childe = (SpecExp) child;
+					if (childe.getOperator() != Operator.FINALLY)
+						throw new Exception(exp_stmt);
+					// otherwise it is FINALLY
+					Spec grandchild = childe.getChildren()[0];
+					if (!(grandchild instanceof SpecBDD))
+						throw new Exception(exp_stmt);
+					// otherwise it is SpecBDD
+					newSpecs[i] = sp;
+					i++;
+				}
+			}
+		}
+		return Arrays.copyOfRange(newSpecs, 0, j);
+	}
+	
+	
+	
+	public static Spec[] selectGoal(Spec[] spcs, int guiltyGF) throws Exception {
+		Spec[] newSpecs = new Spec[spcs.length];
+		int i = 0;
+		int j = 0;
+		for (Spec sp : spcs) {
+			String exp_stmt = "Cannot parse specification \"" + sp + "\".\n";
+
+			// ** 1. if it is just a simple BDD
+			if (sp instanceof SpecBDD) {
+				newSpecs[i] = sp;
+				i++;
+			} else {
+				// ** 2. if it is a global specification.
+				if (!(sp instanceof SpecExp))
+					throw new Exception(exp_stmt);
+				SpecExp spe = (SpecExp) sp;
+				Spec child = spe.getChildren()[0];
+				if (spe.getOperator() != Operator.GLOBALLY)
+					throw new Exception(exp_stmt);
+				// otherwise it is GLOBALLY
+				if (child instanceof SpecBDD) {
+					newSpecs[i] = sp;
+					i++;
+				} else {
+					// ** 3. if it is a global finally specification.
+					if (!(child instanceof SpecExp))
+						throw new Exception(exp_stmt);
+					// otherwise it is SpecExp
+					SpecExp childe = (SpecExp) child;
+					if (childe.getOperator() != Operator.FINALLY)
+						throw new Exception(exp_stmt);
+					// otherwise it is FINALLY
+					Spec grandchild = childe.getChildren()[0];
+					if (!(grandchild instanceof SpecBDD))
+						throw new Exception(exp_stmt);
+					// otherwise it is SpecBDD
+					if (j == guiltyGF) {
+						newSpecs[i] = sp;
+						i++;
+					}
+					j++;
+				}
+			}
+		}
+		return Arrays.copyOfRange(newSpecs, 0, j);
+		
+	}
+	
+	public static int countGlobals(Spec[] spcs) throws Exception {
+		int i = 0;
+		for (Spec sp : spcs) {
+			String exp_stmt = "Cannot parse specification \"" + sp + "\".\n";
+
+			// ** 1. if it is just a simple BDD
+			if (sp instanceof SpecBDD) {
+				continue;
+			} else {
+				// ** 2. if it is a global specification.
+				if (!(sp instanceof SpecExp))
+					throw new Exception(exp_stmt);
+				SpecExp spe = (SpecExp) sp;
+				Spec child = spe.getChildren()[0];
+				if (spe.getOperator() != Operator.GLOBALLY)
+					throw new Exception(exp_stmt);
+				// otherwise it is GLOBALLY
+				if (child instanceof SpecBDD) {
+					i++;
+				} else {
+					// ** 3. if it is a global finally specification.
+					if (!(child instanceof SpecExp))
+						throw new Exception(exp_stmt);
+					// otherwise it is SpecExp
+					SpecExp childe = (SpecExp) child;
+					if (childe.getOperator() != Operator.FINALLY)
+						throw new Exception(exp_stmt);
+					// otherwise it is FINALLY
+					Spec grandchild = childe.getChildren()[0];
+					if (!(grandchild instanceof SpecBDD))
+						throw new Exception(exp_stmt);
+					// otherwise it is SpecBDD
+				}
+			}
+		}
+		return i;
+	}
+	
+	public static String analyze(SMVModule env, SMVModule sys, String smv, String ltl) {
 
 		  
 		int explainSys=0, explainEnv = 0; //keep track of explanations to avoid redundancy
@@ -171,7 +370,7 @@ public class GROneDebug {
 		  
 		// check for unsatisfiability or unrealizability of the justice/liveness (vs. safety) conditions
 		try{
-			    debugInfo += justiceChecks(env,sys,explainSys,explainEnv, falsifyEnv);
+			    debugInfo += justiceChecks(env,sys,explainSys,explainEnv, falsifyEnv, smv, ltl);
 		}catch (Exception e){//Catch exception if any
 			      System.err.println("Error: " + e.getMessage());
 		}
@@ -187,7 +386,7 @@ public class GROneDebug {
 	    // You may or may not have to override other methods
 	}
 	
-	public static String justiceChecks(SMVModule env, SMVModule sys, int explainSys, int explainEnv, boolean falsifyEnv) throws GameException  {
+	public static String justiceChecks(SMVModule env, SMVModule sys, int explainSys, int explainEnv, boolean falsifyEnv, String smv, String ltl) throws Exception  {
 		
 		BDD all_init = sys.initial().and( env.initial());
 		BDD counter_exmple;
@@ -284,6 +483,8 @@ public class GROneDebug {
 						 debugInfo += "System highlighted goal(s) unrealizable " + (i-1) + "\n";
 						 explainSys = 1;		
 					 }
+					 
+					debugInfo += cores(smv, ltl, i-1);
 					 i = sys.justiceNum() + 1;
 				 }
 			}

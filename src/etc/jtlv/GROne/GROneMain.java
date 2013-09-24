@@ -178,7 +178,9 @@ public class GROneMain {
 			System.out.println("Strategy time: " + t2);
 			System.out.println("===== Done ==============================");
 
-
+			String debugFile = args[1].replaceAll("\\.[^\\.]+$",".debug");
+			GROneDebug.analyze(env,sys,args[0],args[1]);
+			
 			//Error code = 1 on exit
 			System.exit(1);
 		}
@@ -202,7 +204,7 @@ public class GROneMain {
 		// ** Analysis calls
 
 				String debugFile = args[1].replaceAll("\\.[^\\.]+$",".debug");
-				GROneDebug.analyze(env,sys);
+				GROneDebug.analyze(env,sys,args[0],args[1]);
 				
 		System.exit(0);
 		
